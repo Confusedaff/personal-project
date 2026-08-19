@@ -1,3 +1,6 @@
 myenv
 __pycache__/
 Fake-News-main.zip
+.env
+data/user_data/
+data/users.db

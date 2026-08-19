@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Any
 
 import joblib
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
@@ -53,6 +53,10 @@ from agents.knowledge_base import get_knowledge_base
 from agents.review_queue import get_review_queue
 from agents.feedback import get_feedback_loop
 
+# Import auth system
+from api.auth import get_current_user
+from api import user_db
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("fakenews.api")
 
@@ -75,6 +79,24 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
 )
+
+# ── Auth router ──
+from api.auth import router as auth_router
+app.include_router(auth_router, prefix="/auth", tags=["auth"])
+
+# ── Static file serving for dashboard ──
+from fastapi.staticfiles import StaticFiles
+DASHBOARD_DIR = ROOT / "dashboard"
+app.mount("/dashboard", StaticFiles(directory=str(DASHBOARD_DIR)), name="dashboard")
+
+
+@app.get("/login", response_class=HTMLResponse)
+async def login_page():
+    """Public login page — no auth required."""
+    login_path = DASHBOARD_DIR / "login.html"
+    if not login_path.exists():
+        raise HTTPException(status_code=503, detail="Login page not found.")
+    return HTMLResponse(content=login_path.read_text(encoding="utf-8"))
 
 MODELS_DIR = ROOT / "models"
 REPORTS_DIR = ROOT / "reports"
@@ -162,32 +184,41 @@ DASHBOARD_PATH = ROOT / "dashboard" / "index.html"
 
 @app.get("/", response_class=HTMLResponse)
 def dashboard():
-    """Serve the analyst dashboard (avoids CORS issues with file:// URLs)."""
+    """Serve the analyst dashboard. Client-side JS handles auth redirect."""
+    if not DASHBOARD_PATH.exists():
+        raise HTTPException(status_code=503, detail="Dashboard not built. Run src/build_dashboard.py.")
+    return HTMLResponse(content=DASHBOARD_PATH.read_text(encoding="utf-8"))
+
+
+@app.get("/dashboard", response_class=HTMLResponse)
+def dashboard_alt():
+    """Alias for / — serves the analyst dashboard."""
     if not DASHBOARD_PATH.exists():
         raise HTTPException(status_code=503, detail="Dashboard not built. Run src/build_dashboard.py.")
     return HTMLResponse(content=DASHBOARD_PATH.read_text(encoding="utf-8"))
 
 
 @app.get("/health")
-def health():
+def health(user: dict = Depends(get_current_user)):
     kb = get_knowledge_base()
-    queue = get_review_queue()
+    user_queue = user_db.get_review_queue_stats(user["id"])
     return {
         "status": "ok",
         "model": best_model_name,
         "version": "2.0.0-multi-agent",
+        "user": user["username"],
         "agents": [
             "ingestion", "claim_extraction", "ml_classifier",
             "fact_check", "source_credibility", "media_forensics",
             "bias_sentiment", "orchestrator"
         ],
         "knowledge_base": kb.get_stats(),
-        "review_queue": queue.get_stats(),
+        "review_queue": user_queue,
     }
 
 
 @app.post("/predict", response_model=PredictResponse)
-def predict(req: PredictRequest):
+def predict(req: PredictRequest, user: dict = Depends(get_current_user)):
     """Legacy single-model endpoint (backward compatible)."""
     content = f"{req.title}. {req.text}" if req.title else req.text
     cleaned = clean_text(content, remove_dateline=True)
@@ -206,9 +237,10 @@ def predict(req: PredictRequest):
 
 
 @app.post("/analyze", response_model=AnalyzeResponse)
-def analyze(req: AnalyzeRequest):
+def analyze(req: AnalyzeRequest, user: dict = Depends(get_current_user)):
     """Multi-agent analysis with full evidence trail."""
     t0 = time.time()
+    user_id = user["id"]
 
     if not req.text and not req.url:
         raise HTTPException(status_code=400, detail="Either 'text' or 'url' must be provided.")
@@ -256,18 +288,17 @@ def analyze(req: AnalyzeRequest):
     orchestrator_input["agent_results"] = agent_results
     verdict = orchestrator(orchestrator_input)
 
-    # 5. Human review queue
-    review_queue = get_review_queue()
+    # 5. Human review queue (per-user)
     if verdict.raw_output.get("needs_human_review", False):
-        queue_id = review_queue.add(
+        queue_id = user_db.add_to_review_queue(
+            user_id=user_id,
             article=enriched,
             verdict=verdict.to_dict(),
-            review_reason=verdict.raw_output.get("review_reason", ""),
+            reason=verdict.raw_output.get("review_reason", ""),
         )
-        logger.info(f"Added to review queue: entry #{queue_id}")
+        logger.info(f"Added to review queue for user {user_id}: entry #{queue_id}")
 
-    # 6. Log to knowledge base
-    kb = get_knowledge_base()
+    # 6. Log to knowledge base (per-user)
     for claim_obj in claims:
         claim_text = claim_obj.get("claim", "")
         if claim_text:
@@ -275,7 +306,8 @@ def analyze(req: AnalyzeRequest):
             for r in agent_results:
                 if r.agent_name == "fact_check":
                     sources = r.raw_output.get("sources", [])
-            kb.add_entry(
+            user_db.add_kb_entry(
+                user_id=user_id,
                 claim=claim_text,
                 verdict=verdict.label.value,
                 sources=sources[:5],
@@ -297,48 +329,41 @@ def analyze(req: AnalyzeRequest):
 
 
 @app.get("/review-queue")
-def review_queue_status():
-    queue = get_review_queue()
-    return queue.get_stats()
+def review_queue_status(user: dict = Depends(get_current_user)):
+    return user_db.get_review_queue_stats(user["id"])
 
 
 @app.get("/review-queue/pending")
-def review_queue_pending():
-    queue = get_review_queue()
-    return queue.get_pending()
+def review_queue_pending(user: dict = Depends(get_current_user)):
+    return user_db.get_pending_reviews(user["id"])
 
 
 @app.post("/review/{entry_id}/resolve")
-def resolve_review(entry_id: int, req: ReviewResolveRequest):
-    queue = get_review_queue()
-    for entry in queue.queue:
-        if entry["id"] == entry_id:
-            entry["status"] = "resolved"
-            entry["human_verdict"] = req.human_verdict
-            entry["human_notes"] = req.notes
-            import time as _time
-            entry["reviewed_at"] = _time.time()
-            queue._save()
+def resolve_review(entry_id: int, req: ReviewResolveRequest, user: dict = Depends(get_current_user)):
+    user_id = user["id"]
+    success = user_db.resolve_review(user_id, entry_id, req.human_verdict, req.notes)
+    if not success:
+        raise HTTPException(status_code=404, detail=f"Review entry {entry_id} not found")
 
-            # Also log to feedback loop
-            feedback = get_feedback_loop()
-            article_text = entry.get("article", {}).get("title", "")
-            original_verdict = entry.get("verdict", {}).get("label", "")
-            feedback.log_correction(
-                article_text=article_text,
-                original_verdict=original_verdict,
+    # Also log to feedback loop (per-user)
+    queue = user_db.get_review_queue(user_id)
+    for entry in queue:
+        if entry["id"] == entry_id:
+            user_db.log_feedback(
+                user_id=user_id,
+                article_text=entry.get("article", {}).get("title", ""),
+                original_verdict=entry.get("verdict", {}).get("label", ""),
                 corrected_verdict=req.human_verdict,
                 notes=req.notes,
             )
-            return {"status": "resolved", "entry_id": entry_id}
-
-    raise HTTPException(status_code=404, detail=f"Review entry {entry_id} not found")
+            break
+    return {"status": "resolved", "entry_id": entry_id}
 
 
 @app.post("/feedback")
-def log_feedback(req: FeedbackRequest):
-    feedback = get_feedback_loop()
-    entry = feedback.log_correction(
+def log_feedback(req: FeedbackRequest, user: dict = Depends(get_current_user)):
+    entry = user_db.log_feedback(
+        user_id=user["id"],
         article_text=req.article_text,
         original_verdict=req.original_verdict,
         corrected_verdict=req.corrected_verdict,
@@ -348,34 +373,33 @@ def log_feedback(req: FeedbackRequest):
 
 
 @app.get("/knowledge-base/stats")
-def knowledge_base_stats():
-    kb = get_knowledge_base()
-    return kb.get_stats()
+def knowledge_base_stats(user: dict = Depends(get_current_user)):
+    return user_db.get_kb_stats(user["id"])
 
 
 @app.get("/stats/model-comparison")
-def model_comparison():
+def model_comparison(user: dict = Depends(get_current_user)):
     return _load_report("model_comparison.json")
 
 
 @app.get("/stats/confusion-matrix")
-def confusion_matrix():
+def confusion_matrix(user: dict = Depends(get_current_user)):
     data = _load_report("confusion_matrices.json")
     return data.get(best_model_name, data)
 
 
 @app.get("/stats/category-breakdown")
-def category_breakdown():
+def category_breakdown(user: dict = Depends(get_current_user)):
     return _load_report("category_breakdown.json")
 
 
 @app.get("/stats/trend")
-def trend():
+def trend(user: dict = Depends(get_current_user)):
     return _load_report("trend_data.json")
 
 
 @app.get("/limitations")
-def limitations():
+def limitations(user: dict = Depends(get_current_user)):
     path = ROOT / "docs" / "limitations.md"
     if not path.exists():
         raise HTTPException(status_code=503, detail="Limitations note not generated yet.")
