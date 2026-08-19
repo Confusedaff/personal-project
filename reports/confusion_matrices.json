@@ -1,0 +1,66 @@
+{
+  "Logistic Regression": {
+    "labels": [
+      "fake(0)",
+      "real(1)"
+    ],
+    "matrix": [
+      [
+        4629,
+        66
+      ],
+      [
+        41,
+        4242
+      ]
+    ]
+  },
+  "Multinomial Naive Bayes": {
+    "labels": [
+      "fake(0)",
+      "real(1)"
+    ],
+    "matrix": [
+      [
+        4505,
+        190
+      ],
+      [
+        186,
+        4097
+      ]
+    ]
+  },
+  "Linear SVM": {
+    "labels": [
+      "fake(0)",
+      "real(1)"
+    ],
+    "matrix": [
+      [
+        4665,
+        30
+      ],
+      [
+        27,
+        4256
+      ]
+    ]
+  },
+  "Random Forest": {
+    "labels": [
+      "fake(0)",
+      "real(1)"
+    ],
+    "matrix": [
+      [
+        4635,
+        60
+      ],
+      [
+        36,
+        4247
+      ]
+    ]
+  }
+}

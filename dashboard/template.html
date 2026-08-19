@@ -1,0 +1,558 @@
+<!-- Fake News Detection — Analyst Desk dashboard. Self-contained: embeds all computed
+     reports plus a compact client-side model so predictions run with no backend. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,400;0,500;0,600;1,500&family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+
+<style>
+#fnd-root {
+  --bg: #10161d;
+  --panel: #1a2129;
+  --panel-2: #212b34;
+  --border: #2b3540;
+  --border-strong: #3d4a56;
+  --text-primary: #edeae0;
+  --text-secondary: #a6a395;
+  --text-muted: #6e6c60;
+  --real: #4fb3a0;
+  --real-dim: #24322f;
+  --fake: #e2604f;
+  --fake-dim: #3a2924;
+  --amber: #e8a83d;
+  font-family: 'Space Grotesk', sans-serif;
+  background: var(--bg);
+  color: var(--text-primary);
+  padding: 0;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+#fnd-root * { box-sizing: border-box; }
+#fnd-root .wrap { max-width: 1080px; margin: 0 auto; padding: 40px 28px 56px; }
+#fnd-root .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+
+#fnd-root .eyebrow {
+  font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.12em;
+  color: var(--amber); text-transform: uppercase; margin: 0 0 14px;
+}
+#fnd-root h1 {
+  font-family: 'Newsreader', serif; font-weight: 500; font-size: 40px; line-height: 1.15;
+  margin: 0 0 12px; color: var(--text-primary);
+}
+#fnd-root h1 em { font-style: italic; color: var(--real); }
+#fnd-root .sub {
+  font-size: 15px; color: var(--text-secondary); max-width: 620px; line-height: 1.6; margin: 0 0 26px;
+}
+#fnd-root .ticker {
+  font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--text-muted);
+  border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+  padding: 11px 0; display: flex; flex-wrap: wrap; gap: 8px 22px; margin-bottom: 40px;
+}
+#fnd-root .ticker span b { color: var(--text-secondary); font-weight: 500; }
+
+#fnd-root section { margin-bottom: 46px; }
+#fnd-root .sec-head { margin-bottom: 18px; }
+#fnd-root .sec-title {
+  font-family: 'Newsreader', serif; font-size: 22px; font-weight: 500; margin: 0 0 4px; color: var(--text-primary);
+}
+#fnd-root .sec-desc { font-size: 13.5px; color: var(--text-secondary); margin: 0; line-height: 1.55; max-width: 640px; }
+
+#fnd-root .panel {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 24px;
+}
+
+/* Live desk */
+#fnd-root .desk { background: var(--panel-2); border: 1px solid var(--border-strong); border-radius: 12px; padding: 26px; }
+#fnd-root .desk-label {
+  font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--text-muted); margin-bottom: 10px;
+}
+#fnd-root textarea#fnd-input {
+  width: 100%; min-height: 96px; resize: vertical; background: var(--bg); color: var(--text-primary);
+  border: 1px solid var(--border-strong); border-radius: 8px; padding: 14px; font-size: 14px;
+  font-family: 'Space Grotesk', sans-serif; line-height: 1.55; outline: none;
+}
+#fnd-root textarea#fnd-input:focus { border-color: var(--real); }
+#fnd-root .desk-row { display: flex; align-items: center; gap: 14px; margin-top: 14px; flex-wrap: wrap; }
+#fnd-root button#fnd-run {
+  font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; letter-spacing: 0.06em; text-transform: uppercase;
+  background: var(--real); color: #0d1a17; border: none; border-radius: 7px; padding: 11px 20px;
+  cursor: pointer; font-weight: 500; transition: opacity 0.15s;
+}
+#fnd-root button#fnd-run:hover { opacity: 0.88; }
+#fnd-root button#fnd-run:disabled { opacity: 0.5; cursor: default; }
+#fnd-root .desk-hint { font-size: 12px; color: var(--text-muted); }
+#fnd-root .error-msg { font-size: 12.5px; color: var(--fake); margin-top: 8px; display: none; }
+
+#fnd-root .verdict-block { margin-top: 20px; display: none; }
+#fnd-root .verdict-line {
+  font-family: 'IBM Plex Mono', monospace; font-size: 15px; color: var(--text-primary);
+  border-left: 3px solid var(--border-strong); padding-left: 14px; min-height: 22px; white-space: pre;
+}
+#fnd-root .verdict-line .cursor { display: inline-block; width: 8px; background: var(--amber); animation: fnd-blink 1s step-end infinite; }
+@keyframes fnd-blink { 50% { opacity: 0; } }
+#fnd-root .verdict-line.real { border-left-color: var(--real); }
+#fnd-root .verdict-line.fake { border-left-color: var(--fake); }
+
+#fnd-root .source-badge { display: inline-block; font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing: 0.04em; text-transform: uppercase; padding: 2px 8px; border-radius: 3px; margin-left: 2px; border: 1px solid var(--text-muted); color: var(--text-muted); }
+#fnd-root .source-badge.live { border-color: var(--real); color: var(--real); }
+#fnd-root .source-badge.fallback { border-color: var(--amber); color: var(--amber); }
+#fnd-root .prob-bars { margin-top: 16px; display: flex; flex-direction: column; gap: 10px; }
+#fnd-root .prob-row { display: grid; grid-template-columns: 46px 1fr 52px; align-items: center; gap: 10px; }
+#fnd-root .prob-label { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--text-secondary); }
+#fnd-root .prob-track { height: 8px; background: var(--bg); border-radius: 4px; overflow: hidden; border: 1px solid var(--border); }
+#fnd-root .prob-fill { height: 100%; width: 0%; transition: width 0.6s ease; border-radius: 4px; }
+#fnd-root .prob-fill.fake { background: var(--fake); }
+#fnd-root .prob-fill.real { background: var(--real); }
+#fnd-root .prob-pct { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--text-secondary); text-align: right; }
+#fnd-root .desk-footnote { font-size: 11.5px; color: var(--text-muted); margin-top: 16px; line-height: 1.5; }
+
+/* Model bench */
+#fnd-root .bench-chart-wrap { height: 260px; margin-bottom: 18px; }
+#fnd-root .bench-chips { display: flex; flex-wrap: wrap; gap: 10px; }
+#fnd-root .chip {
+  font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; color: var(--text-secondary);
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: 20px; padding: 6px 13px;
+}
+#fnd-root .chip b { color: var(--text-primary); font-weight: 500; }
+#fnd-root .chip.winner { border-color: var(--real); color: var(--real); }
+#fnd-root .chip.winner b { color: var(--real); }
+
+/* Confusion matrix */
+#fnd-root .cm-grid { display: grid; grid-template-columns: 120px 1fr 1fr; gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+#fnd-root .cm-cell { background: var(--panel); padding: 16px; }
+#fnd-root .cm-cell.head { background: var(--panel-2); font-family: 'IBM Plex Mono', monospace; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); display: flex; align-items: center; }
+#fnd-root .cm-cell.correct { background: var(--real-dim); }
+#fnd-root .cm-cell.wrong { background: var(--fake-dim); }
+#fnd-root .cm-num { font-family: 'IBM Plex Mono', monospace; font-size: 26px; font-weight: 500; color: var(--text-primary); }
+#fnd-root .cm-cap { font-size: 11.5px; color: var(--text-secondary); margin-top: 4px; }
+
+/* Category breakdown */
+#fnd-root .cat-row { display: grid; grid-template-columns: 150px 1fr 90px 60px; align-items: center; gap: 14px; padding: 9px 0; border-bottom: 1px solid var(--border); }
+#fnd-root .cat-row:last-child { border-bottom: none; }
+#fnd-root .cat-name { font-size: 13px; color: var(--text-primary); }
+#fnd-root .cat-track { height: 7px; background: var(--bg); border-radius: 4px; overflow: hidden; border: 1px solid var(--border); }
+#fnd-root .cat-fill { height: 100%; background: var(--real); border-radius: 4px; }
+#fnd-root .cat-n { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--text-muted); text-align: right; }
+#fnd-root .cat-pct { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--text-secondary); text-align: right; }
+
+/* Trend chart */
+#fnd-root .trend-chart-wrap { height: 240px; }
+
+/* Editor's note */
+#fnd-root .note { border: 1px solid var(--amber); border-left: 3px solid var(--amber); border-radius: 8px; padding: 22px 24px; background: rgba(232,168,61,0.06); }
+#fnd-root .note-title { font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--amber); margin-bottom: 10px; }
+#fnd-root .note p { font-size: 13.5px; color: var(--text-secondary); line-height: 1.65; margin: 0 0 12px; }
+#fnd-root .note p:last-child { margin-bottom: 0; }
+#fnd-root .note .fig { color: var(--text-primary); font-family: 'IBM Plex Mono', monospace; }
+#fnd-root .ablation-table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 12.5px; }
+#fnd-root .ablation-table th { text-align: left; font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); padding: 6px 10px; border-bottom: 1px solid var(--border); }
+#fnd-root .ablation-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text-secondary); }
+#fnd-root .ablation-table td:first-child { color: var(--text-primary); }
+#fnd-root .ablation-table td.mono { font-family: 'IBM Plex Mono', monospace; }
+
+#fnd-root footer { border-top: 1px solid var(--border); padding-top: 20px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--text-muted); line-height: 1.8; }
+#fnd-root footer b { color: var(--text-secondary); font-weight: 500; }
+
+@media (max-width: 640px) {
+  #fnd-root h1 { font-size: 30px; }
+  #fnd-root .cat-row { grid-template-columns: 100px 1fr 60px; }
+  #fnd-root .cat-n { display: none; }
+  #fnd-root .cm-grid { grid-template-columns: 90px 1fr 1fr; }
+}
+</style>
+
+<div id="fnd-root">
+<div class="wrap">
+
+  <p class="eyebrow">Use case #15 &middot; GenAI &amp; security</p>
+  <h1>Fake news detection<br><em>analyst desk</em></h1>
+  <p class="sub">TF-IDF features benchmarked across four classical classifiers on the Kaggle Fake and Real News Dataset. The best model ships behind a REST API; this desk shows how it performs and lets you try it live.</p>
+  <div class="ticker" id="fnd-ticker"></div>
+
+  <section aria-labelledby="fnd-live-h">
+    <h2 id="fnd-live-h" class="sr-only">Live prediction demo</h2>
+    <div class="desk">
+      <div class="desk-label">Wire intake — paste a headline or article</div>
+      <textarea id="fnd-input" placeholder="Paste a headline and/or a few sentences of article text here...">Scientists at the university published a peer-reviewed study on regional climate patterns in the journal Nature this week, based on two decades of satellite data.</textarea>
+      <div class="desk-row">
+        <button id="fnd-run">Run analysis</button>
+        <span class="desk-hint" id="fnd-source-hint">Checking backend&hellip;</span>
+      </div>
+      <div class="error-msg" id="fnd-error">Type or paste some article text first.</div>
+      <div class="verdict-block" id="fnd-verdict-block">
+        <div class="verdict-line" id="fnd-verdict-line"></div>
+        <span class="source-badge" id="fnd-source-badge"></span>
+        <div class="prob-bars">
+          <div class="prob-row">
+            <span class="prob-label">FAKE</span>
+            <div class="prob-track"><div class="prob-fill fake" id="fnd-bar-fake"></div></div>
+            <span class="prob-pct" id="fnd-pct-fake">0%</span>
+          </div>
+          <div class="prob-row">
+            <span class="prob-label">REAL</span>
+            <div class="prob-track"><div class="prob-fill real" id="fnd-bar-real"></div></div>
+            <span class="prob-pct" id="fnd-pct-real">0%</span>
+          </div>
+        </div>
+      </div>
+      <div class="desk-footnote">Calls the production API (Linear SVM, 30,000 features, test F1 0.994) at <span style="color:var(--text-secondary)" id="fnd-api-base-label">&mdash;</span> for each prediction. If the API is unreachable, the desk automatically falls back to a compact 3,500-term logistic regression (test F1 0.986) bundled for in-browser scoring — see <span style="color:var(--text-secondary)">api/main.py</span> and <span style="color:var(--text-secondary)">src/export_js_model.py</span>.</div>
+    </div>
+  </section>
+
+  <section aria-labelledby="fnd-bench-h">
+    <div class="sec-head">
+      <h2 id="fnd-bench-h" class="sec-title">Model bench</h2>
+      <p class="sec-desc">Four classifiers, identical TF-IDF features, identical 8,978-article held-out test set. MVP target was F1 &ge; 0.90 — all four clear it.</p>
+    </div>
+    <div class="panel">
+      <div class="bench-chart-wrap"><canvas id="fnd-bench-chart"></canvas></div>
+      <div class="bench-chips" id="fnd-bench-chips"></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="fnd-cm-h">
+    <div class="sec-head">
+      <h2 id="fnd-cm-h" class="sec-title">Where the production model errs</h2>
+      <p class="sec-desc">Confusion matrix for Linear SVM (the deployed model) on the held-out test set.</p>
+    </div>
+    <div class="cm-grid" id="fnd-cm-grid"></div>
+  </section>
+
+  <section aria-labelledby="fnd-cat-h">
+    <div class="sec-head">
+      <h2 id="fnd-cat-h" class="sec-title">Accuracy by subject line</h2>
+      <p class="sec-desc">Held-out test set, grouped by the article's original subject tag. Each tag belongs to only one class in this corpus (see the editor's note below), so this reads as "accuracy within a single-class bucket," not topic difficulty.</p>
+    </div>
+    <div class="panel" id="fnd-cat-list"></div>
+  </section>
+
+  <section aria-labelledby="fnd-trend-h">
+    <div class="sec-head">
+      <h2 id="fnd-trend-h" class="sec-title">Corpus volume over time</h2>
+      <p class="sec-desc">Monthly fake vs. real article counts across the full training corpus (2015&ndash;2018) &mdash; a historical view of the training data, not live traffic.</p>
+    </div>
+    <div class="panel"><div class="trend-chart-wrap"><canvas id="fnd-trend-chart"></canvas></div></div>
+  </section>
+
+  <section aria-labelledby="fnd-note-h">
+    <h2 id="fnd-note-h" class="sr-only">Editor's note on limitations</h2>
+    <div class="note">
+      <div class="note-title">Editor's note &mdash; read before deploying</div>
+      <p>Reuters wire copy in this corpus almost always opens with a dateline like <span class="fig">WASHINGTON (Reuters) &mdash;</span> that a classifier can key on instead of learning anything about content. We tested this directly:</p>
+      <table class="ablation-table" id="fnd-ablation-table"></table>
+      <p>Stripping the dateline (and any leftover "Reuters" mentions) removes the biggest shortcut and costs about half a point of accuracy &mdash; the residual is attributable to genuine content and style signal, but part of that remaining signal is still Reuters' own house style (formal attribution, weekday-dated reporting, Washington political coverage), not misinformation itself.</p>
+      <p>A second artifact: every <span class="fig">subject</span> tag in this corpus belongs to exactly one class &mdash; <span class="fig">politicsNews</span> and <span class="fig">worldnews</span> are 100% real, the other six tags are 100% fake. The model doesn't use <span class="fig">subject</span> as a feature for exactly this reason, but the category breakdown below should be read as "accuracy within a single-class bucket," not a real per-topic difficulty signal. The corpus also skews heavily to political and world-news topics overall. Treat predictions as a triage signal for human fact-checkers, not an automated takedown mechanism. Full write-up: <span class="fig">docs/limitations.md</span>.</p>
+    </div>
+  </section>
+
+  <footer>
+    <div><b>Data</b> Kaggle Fake and Real News Dataset &middot; True.csv + Fake.csv &middot; 44,889 articles after cleaning</div>
+    <div><b>Pipeline</b> src/preprocessing.py &middot; src/train.py &middot; src/ablation_dateline.py &middot; src/export_js_model.py</div>
+    <div><b>Serving</b> api/main.py (FastAPI) &middot; this dashboard: dashboard/index.html</div>
+  </footer>
+
+</div>
+</div>
+
+<script>
+(function() {
+  const DATA = __EMBEDDED_DATA__;
+
+  // ---------- ticker ----------
+  const mc = DATA.modelComparison;
+  const best = mc.best_model;
+  const bestStats = mc.results[best];
+  document.getElementById('fnd-ticker').innerHTML =
+    `<span><b>${mc.n_train + mc.n_test}</b> articles indexed</span>` +
+    `<span>production model <b>${best}</b></span>` +
+    `<span>test F1 <b>${bestStats.f1_weighted}</b></span>` +
+    `<span>vocab <b>${mc.n_features.toLocaleString()}</b> terms</span>`;
+
+  // ---------- live prediction ----------
+  const STOP = new Set(DATA.stopwords);
+  const TERMS = DATA.jsModel.terms;
+  const INTERCEPT = DATA.jsModel.intercept;
+
+  function cleanText(raw) {
+    let t = raw;
+    t = t.replace(/^\s*[A-Z][A-Za-z0-9.,'\-\/\s]{0,90}\(Reuters\)\s*-\s*/, '');
+    t = t.replace(/https?:\/\/\S+|www\.\S+/gi, ' ');
+    t = t.toLowerCase();
+    t = t.replace(/\breuters\b/g, ' ');
+    t = t.replace(/[^a-z\s]/g, ' ');
+    t = t.replace(/\s+/g, ' ').trim();
+    return t;
+  }
+
+  function predict(raw) {
+    const cleaned = cleanText(raw);
+    if (!cleaned) return null;
+    const tokens = cleaned.split(' ').filter(t => t && !STOP.has(t));
+    const counts = {};
+    for (const t of tokens) {
+      if (TERMS.hasOwnProperty(t)) counts[t] = (counts[t] || 0) + 1;
+    }
+    const vals = {};
+    let sumSq = 0;
+    for (const t in counts) {
+      const [idf] = TERMS[t];
+      const tf = 1 + Math.log(counts[t]);
+      const v = tf * idf;
+      vals[t] = v;
+      sumSq += v * v;
+    }
+    const norm = Math.sqrt(sumSq) || 1;
+    let z = INTERCEPT;
+    let matched = 0;
+    for (const t in vals) {
+      const [, coef] = TERMS[t];
+      z += (vals[t] / norm) * coef;
+      matched++;
+    }
+    const pReal = 1 / (1 + Math.exp(-z));
+    return { pReal, pFake: 1 - pReal, matched, tokenCount: tokens.length };
+  }
+
+  function typewrite(el, text, cls) {
+    el.className = 'verdict-line ' + cls;
+    el.textContent = '';
+    let i = 0;
+    const cursor = document.createElement('span');
+    cursor.className = 'cursor';
+    cursor.textContent = ' ';
+    function step() {
+      if (i <= text.length) {
+        el.textContent = text.slice(0, i);
+        el.appendChild(cursor);
+        i++;
+        setTimeout(step, 14);
+      }
+    }
+    step();
+  }
+
+  const runBtn = document.getElementById('fnd-run');
+  const input = document.getElementById('fnd-input');
+  const errorMsg = document.getElementById('fnd-error');
+  const verdictBlock = document.getElementById('fnd-verdict-block');
+  const verdictLine = document.getElementById('fnd-verdict-line');
+  const sourceBadge = document.getElementById('fnd-source-badge');
+  const sourceHint = document.getElementById('fnd-source-hint');
+  const apiBaseLabel = document.getElementById('fnd-api-base-label');
+
+  // ---------- backend wiring ----------
+  // Resolve the API base at load time so this static file can point at
+  // whatever backend the user is actually running, without a rebuild:
+  //   1. ?api=https://your-api.example.com   (query param, highest priority)
+  //   2. window.FND_API_BASE                 (set this in a <script> tag
+  //                                            before this file loads)
+  //   3. http://127.0.0.1:8000               (default: local `uvicorn` dev server)
+  const urlApiParam = new URLSearchParams(window.location.search).get('api');
+  const API_BASE = (urlApiParam || window.FND_API_BASE || 'http://127.0.0.1:8000').replace(/\/$/, '');
+  const PREDICT_TIMEOUT_MS = 4000;
+  apiBaseLabel.textContent = API_BASE;
+
+  async function predictViaBackend(title, text) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), PREDICT_TIMEOUT_MS);
+    try {
+      const res = await fetch(`${API_BASE}/predict`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: title || '', text: text }),
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        let detail = '';
+        try { detail = (await res.json()).detail || ''; } catch (_) {}
+        throw new Error(detail || `API returned ${res.status}`);
+      }
+      const data = await res.json();
+      // Shape returned by api/main.py's PredictResponse.
+      return {
+        pFake: data.fake_probability,
+        pReal: data.real_probability,
+        modelUsed: data.model_used,
+      };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  // Quick liveness probe on load, purely to set the hint text up front —
+  // the actual per-request fallback logic below never depends on this.
+  (async function checkBackend() {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 2500);
+      const res = await fetch(`${API_BASE}/health`, { signal: controller.signal });
+      clearTimeout(timer);
+      if (res.ok) {
+        sourceHint.textContent = `Connected to backend at ${API_BASE}.`;
+        return;
+      }
+    } catch (_) { /* fall through to offline message */ }
+    sourceHint.textContent = `Backend not reachable at ${API_BASE} — using in-browser backup model.`;
+  })();
+
+  async function runAnalysis() {
+    const raw = input.value;
+    const rawForLocal = raw; // local model cleans title+body together already
+
+    if (!raw || !raw.trim()) {
+      errorMsg.style.display = 'block';
+      verdictBlock.style.display = 'none';
+      return;
+    }
+
+    runBtn.disabled = true;
+    runBtn.textContent = 'Analyzing…';
+
+    let result = null;
+    let source = null; // 'live' | 'fallback'
+    let modelUsed = null;
+
+    try {
+      const live = await predictViaBackend('', raw);
+      result = { pFake: live.pFake, pReal: live.pReal, tokenCount: 1 };
+      source = 'live';
+      modelUsed = live.modelUsed;
+    } catch (err) {
+      // Backend down, slow, CORS-blocked, or erroring — fall back to the
+      // baked-in 3,500-term model so the demo still works instantly.
+      console.warn('Backend prediction failed, falling back to local model:', err);
+      const local = predict(rawForLocal);
+      if (local && local.tokenCount > 0) {
+        result = { pFake: local.pFake, pReal: local.pReal, tokenCount: local.tokenCount };
+        source = 'fallback';
+      }
+    }
+
+    runBtn.disabled = false;
+    runBtn.textContent = 'Run analysis';
+
+    if (!result || result.tokenCount === 0) {
+      errorMsg.textContent = source === 'fallback'
+        ? 'Type or paste some article text first.'
+        : 'Could not get a prediction from the backend or the backup model. Try again.';
+      errorMsg.style.display = 'block';
+      verdictBlock.style.display = 'none';
+      return;
+    }
+
+    errorMsg.style.display = 'none';
+    const label = result.pReal >= result.pFake ? 'REAL' : 'FAKE';
+    const confidence = Math.round(Math.max(result.pReal, result.pFake) * 100);
+    verdictBlock.style.display = 'block';
+    typewrite(verdictLine, `VERDICT: ${label} \u00b7 confidence ${confidence}%`, label.toLowerCase());
+
+    if (source === 'live') {
+      sourceBadge.className = 'source-badge live';
+      sourceBadge.textContent = `live \u00b7 ${modelUsed || 'backend model'}`;
+      sourceHint.textContent = `Connected to backend at ${API_BASE}.`;
+    } else {
+      sourceBadge.className = 'source-badge fallback';
+      sourceBadge.textContent = 'backup \u00b7 in-browser model';
+      sourceHint.textContent = `Backend not reachable at ${API_BASE} — using in-browser backup model.`;
+    }
+
+    requestAnimationFrame(() => {
+      document.getElementById('fnd-bar-fake').style.width = Math.round(result.pFake * 100) + '%';
+      document.getElementById('fnd-bar-real').style.width = Math.round(result.pReal * 100) + '%';
+      document.getElementById('fnd-pct-fake').textContent = Math.round(result.pFake * 100) + '%';
+      document.getElementById('fnd-pct-real').textContent = Math.round(result.pReal * 100) + '%';
+    });
+  }
+
+  runBtn.addEventListener('click', runAnalysis);
+  runAnalysis();
+
+  // ---------- model bench chart ----------
+  const modelNames = Object.keys(mc.results);
+  const accData = modelNames.map(n => mc.results[n].accuracy);
+  const f1Data = modelNames.map(n => mc.results[n].f1_weighted);
+
+  new Chart(document.getElementById('fnd-bench-chart'), {
+    type: 'bar',
+    data: {
+      labels: modelNames,
+      datasets: [
+        { label: 'Accuracy', data: accData, backgroundColor: '#4fb3a0', borderRadius: 4, maxBarThickness: 34 },
+        { label: 'F1 (weighted)', data: f1Data, backgroundColor: '#e8a83d', borderRadius: 4, maxBarThickness: 34 },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: {
+        y: { min: 0.9, max: 1.0, ticks: { color: '#a6a395', font: { family: 'IBM Plex Mono', size: 11 } }, grid: { color: '#2b3540' } },
+        x: { ticks: { color: '#edeae0', font: { family: 'Space Grotesk', size: 12 } }, grid: { display: false } }
+      },
+      plugins: { legend: { labels: { color: '#a6a395', font: { family: 'Space Grotesk', size: 12 } } } }
+    }
+  });
+
+  const chipsEl = document.getElementById('fnd-bench-chips');
+  chipsEl.innerHTML = modelNames.map(n => {
+    const r = mc.results[n];
+    const winner = n === best ? ' winner' : '';
+    return `<span class="chip${winner}"><b>${n}</b> &middot; acc ${r.accuracy} &middot; F1 ${r.f1_weighted}</span>`;
+  }).join('');
+
+  // ---------- confusion matrix ----------
+  const cm = DATA.confusion[best];
+  const [[tf, ff], [fr, tr]] = cm.matrix; // rows: actual fake / actual real; cols: pred fake / pred real
+  document.getElementById('fnd-cm-grid').innerHTML = `
+    <div class="cm-cell head"></div>
+    <div class="cm-cell head">Predicted fake</div>
+    <div class="cm-cell head">Predicted real</div>
+    <div class="cm-cell head">Actual fake</div>
+    <div class="cm-cell correct"><div class="cm-num">${tf.toLocaleString()}</div><div class="cm-cap">correctly flagged</div></div>
+    <div class="cm-cell wrong"><div class="cm-num">${ff.toLocaleString()}</div><div class="cm-cap">missed (false real)</div></div>
+    <div class="cm-cell head">Actual real</div>
+    <div class="cm-cell wrong"><div class="cm-num">${fr.toLocaleString()}</div><div class="cm-cap">wrongly flagged</div></div>
+    <div class="cm-cell correct"><div class="cm-num">${tr.toLocaleString()}</div><div class="cm-cap">correctly passed</div></div>
+  `;
+
+  // ---------- category breakdown ----------
+  const cats = DATA.category.slice().sort((a, b) => b.n - a.n);
+  document.getElementById('fnd-cat-list').innerHTML = cats.map(c => `
+    <div class="cat-row">
+      <div class="cat-name">${c.subject}</div>
+      <div class="cat-track"><div class="cat-fill" style="width:${Math.round(c.accuracy*100)}%"></div></div>
+      <div class="cat-n">${c.n.toLocaleString()} articles</div>
+      <div class="cat-pct">${(c.accuracy*100).toFixed(1)}%</div>
+    </div>
+  `).join('');
+
+  // ---------- trend chart ----------
+  const trend = DATA.trend;
+  new Chart(document.getElementById('fnd-trend-chart'), {
+    type: 'line',
+    data: {
+      labels: trend.map(t => t.month),
+      datasets: [
+        { label: 'Fake', data: trend.map(t => t.fake), borderColor: '#e2604f', backgroundColor: 'rgba(226,96,79,0.15)', fill: true, tension: 0.25, pointRadius: 0 },
+        { label: 'Real', data: trend.map(t => t.real), borderColor: '#4fb3a0', backgroundColor: 'rgba(79,179,160,0.15)', fill: true, tension: 0.25, pointRadius: 0 },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: {
+        y: { ticks: { color: '#a6a395', font: { family: 'IBM Plex Mono', size: 10 } }, grid: { color: '#2b3540' } },
+        x: { ticks: { color: '#6e6c60', font: { family: 'IBM Plex Mono', size: 9 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 8 }, grid: { display: false } }
+      },
+      plugins: { legend: { labels: { color: '#a6a395', font: { family: 'Space Grotesk', size: 12 } } } }
+    }
+  });
+
+  // ---------- ablation table ----------
+  const ab = DATA.ablation;
+  document.getElementById('fnd-ablation-table').innerHTML = `
+    <tr><th>Setting</th><th>Accuracy</th><th>F1</th><th>Top terms favoring "real"</th></tr>
+    <tr><td>Dateline left in</td><td class="mono">${ab.with_dateline_leakage.accuracy}</td><td class="mono">${ab.with_dateline_leakage.f1_weighted}</td><td>${ab.with_dateline_leakage.top_terms_favoring_real.slice(0,4).join(', ')}</td></tr>
+    <tr><td>Dateline stripped (production)</td><td class="mono">${ab.without_dateline_leakage_production.accuracy}</td><td class="mono">${ab.without_dateline_leakage_production.f1_weighted}</td><td>${ab.without_dateline_leakage_production.top_terms_favoring_real.slice(0,4).join(', ')}</td></tr>
+  `;
+})();
+</script>

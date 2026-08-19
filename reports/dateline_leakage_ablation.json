@@ -1,0 +1,32 @@
+{
+  "with_dateline_leakage": {
+    "accuracy": 0.9926,
+    "f1_weighted": 0.9926,
+    "top_terms_favoring_real": [
+      "reuters",
+      "said",
+      "washington reuters",
+      "washington",
+      "president donald",
+      "wednesday",
+      "reuters president",
+      "thursday"
+    ]
+  },
+  "without_dateline_leakage_production": {
+    "accuracy": 0.9881,
+    "f1_weighted": 0.9881,
+    "top_terms_favoring_real": [
+      "said",
+      "president donald",
+      "wednesday",
+      "thursday",
+      "tuesday",
+      "friday",
+      "republican",
+      "monday"
+    ]
+  },
+  "accuracy_delta": 0.0045,
+  "note": "Leaving the Reuters wire dateline in the text inflates accuracy by letting the model key on formatting rather than content. The production pipeline strips it; the residual accuracy above is attributable to actual linguistic/stylistic signal."
+}
