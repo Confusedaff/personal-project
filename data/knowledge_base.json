@@ -1,0 +1,535 @@
+[
+  {
+    "id": 0,
+    "claim": "Breaking: scientists expose climate hoax, share before they delete this!!!",
+    "verdict": "fake",
+    "sources": [],
+    "article_text": "SHOCKING news. Breaking: scientists expose climate hoax, share before they delete this!!!",
+    "metadata": {},
+    "added_at": 1787153428.7859282
+  },
+  {
+    "id": 1,
+    "claim": "Delhi court sends Satyendar Jain, 4 others to judicial custody in corruption case - The Hindu",
+    "verdict": "real",
+    "sources": [],
+    "article_text": "Delhi court sends Satyendar Jain, 4 others to judicial custody in corruption case - The Hindu",
+    "metadata": {},
+    "added_at": 1787154639.6133475
+  },
+  {
+    "id": 2,
+    "claim": "the president of india is Mr Donald Trump.",
+    "verdict": "real",
+    "sources": [
+      "en.wikipedia.org/wiki/President_of_India",
+      "en.wikipedia.org/wiki/Donald_Trump"
+    ],
+    "article_text": "the president of india is Mr Donald Trump.",
+    "metadata": {},
+    "added_at": 1787154724.251751
+  },
+  {
+    "id": 3,
+    "claim": "Delhi court sends Satyendar Jain, 4 others to judicial custody in corruption case - The Hindu",
+    "verdict": "real",
+    "sources": [],
+    "article_text": "Delhi court sends Satyendar Jain, 4 others to judicial custody in corruption case - The Hindu",
+    "metadata": {},
+    "added_at": 1787154786.8142872
+  },
+  {
+    "id": 4,
+    "claim": "the president of India is Mr Modi.",
+    "verdict": "real",
+    "sources": [
+      "en.wikipedia.org/wiki/List_of_presidents_of_India"
+    ],
+    "article_text": "the president of India is Mr Modi.",
+    "metadata": {},
+    "added_at": 1787154841.8763092
+  },
+  {
+    "id": 5,
+    "claim": "the president of India is Mr Donald Trump.",
+    "verdict": "real",
+    "sources": [
+      "en.wikipedia.org/wiki/President_of_India",
+      "www.whitehouse.gov/gallery/president-donald-trump-meets-with-prime-minister-narendra-modi-of-india/",
+      "en.wikipedia.org/wiki/Donald_Trump"
+    ],
+    "article_text": "the president of India is Mr Donald Trump. He used to be the president of America.",
+    "metadata": {},
+    "added_at": 1787154866.9172943
+  },
+  {
+    "id": 6,
+    "claim": "He used to be the president of America.",
+    "verdict": "real",
+    "sources": [
+      "en.wikipedia.org/wiki/President_of_India",
+      "www.whitehouse.gov/gallery/president-donald-trump-meets-with-prime-minister-narendra-modi-of-india/",
+      "en.wikipedia.org/wiki/Donald_Trump"
+    ],
+    "article_text": "the president of India is Mr Donald Trump. He used to be the president of America.",
+    "metadata": {},
+    "added_at": 1787154866.9463172
+  },
+  {
+    "id": 7,
+    "claim": "the president of India is Mr Donald Trump.",
+    "verdict": "real",
+    "sources": [
+      "presidentofindia.nic.in",
+      "timesofindia.indiatimes.com/india/donald-trump-india-visit",
+      "en.wikipedia.org/wiki/President_of_India",
+      "www.whitehouse.gov/administration/donald-j-trump/",
+      "www.presidentofindia.gov.in"
+    ],
+    "article_text": "the president of India is Mr Donald Trump. He used to be the president of America.",
+    "metadata": {},
+    "added_at": 1787156071.4491544
+  },
+  {
+    "id": 8,
+    "claim": "He used to be the president of America.",
+    "verdict": "real",
+    "sources": [
+      "presidentofindia.nic.in",
+      "timesofindia.indiatimes.com/india/donald-trump-india-visit",
+      "en.wikipedia.org/wiki/President_of_India",
+      "www.whitehouse.gov/administration/donald-j-trump/",
+      "www.presidentofindia.gov.in"
+    ],
+    "article_text": "the president of India is Mr Donald Trump. He used to be the president of America.",
+    "metadata": {},
+    "added_at": 1787156071.7074897
+  },
+  {
+    "id": 9,
+    "claim": "the president of India is Mr Donald Trump",
+    "verdict": "fake",
+    "sources": [
+      "presidentofindia.nic.in",
+      "en.wikipedia.org/wiki/Donald_Trump",
+      "thehill.com/homenews/administration/6035569-trump-india-save-act/",
+      "www.indiatoday.in/world/story/donald-trump-india-narendra-modi-white-house-great-friend-president-2928624-2026-06-17",
+      "presidentofindia.nic.in/about-us"
+    ],
+    "article_text": "the president of India is Mr Donald Trump",
+    "metadata": {},
+    "added_at": 1787156381.7396135
+  },
+  {
+    "id": 10,
+    "claim": "the president of India is Mr Donald Trump",
+    "verdict": "fake",
+    "sources": [
+      "en.wikipedia.org/wiki/President_of_India",
+      "www.presidentofindia.gov.in/Profile",
+      "presidentofindia.nic.in/about-us",
+      "www.telegraphindia.com/india/pawan-khera-asks-donald-trump-to-take-cec-gyanesh-kumar-gupta-to-us-after-president-cites-indias-voter-id-system/cid/2175498",
+      "www.hindustantimes.com/india-news/narendra-modis-us-visit-7-things-donald-trump-said-about-pm-modi-great-friend-and-an-even-better-negotiator-101739505335411.html"
+    ],
+    "article_text": "the president of India is Mr Donald Trump",
+    "metadata": {},
+    "added_at": 1787156466.764102
+  },
+  {
+    "id": 11,
+    "claim": "the president of India is Mr Donald Trump",
+    "verdict": "fake",
+    "sources": [
+      "www.presidentofindia.gov.in",
+      "en.wikipedia.org/wiki/Donald_Trump",
+      "www.presidentofindia.gov.in/Profile",
+      "en.wikipedia.org/wiki/President_of_India",
+      "www.thehindu.com/news/national/us-president-donald-trump-prime-minister-modi-phone-call-deepavali-updates/article70188666.ece"
+    ],
+    "article_text": "the president of India is Mr Donald Trump",
+    "metadata": {},
+    "added_at": 1787156514.4753382
+  },
+  {
+    "id": 12,
+    "claim": "the president of India is Mr Donald Trump.",
+    "verdict": "fake",
+    "sources": [
+      "www.presidentofindia.gov.in/Profile",
+      "en.wikipedia.org/wiki/President_of_India",
+      "www.telegraphindia.com/india/pawan-khera-asks-donald-trump-to-take-cec-gyanesh-kumar-gupta-to-us-after-president-cites-indias-voter-id-system/cid/2175498",
+      "www.state.gov/releases/office-of-the-spokesperson/2026/05/president-donald-j-trump-secretary-of-state-marco-rubio-indian-external-affairs-minister-subrahmanyam-jaishankar-and-u-s-ambassador-to-india-sergio-gor-at-freedom-250-independence-day-reception/",
+      "www.presidentofindia.gov.in"
+    ],
+    "article_text": "the president of India is Mr Donald Trump. He used to be the president of America.",
+    "metadata": {},
+    "added_at": 1787156680.6783059
+  },
+  {
+    "id": 13,
+    "claim": "He used to be the president of America.",
+    "verdict": "fake",
+    "sources": [
+      "www.presidentofindia.gov.in/Profile",
+      "en.wikipedia.org/wiki/President_of_India",
+      "www.telegraphindia.com/india/pawan-khera-asks-donald-trump-to-take-cec-gyanesh-kumar-gupta-to-us-after-president-cites-indias-voter-id-system/cid/2175498",
+      "www.state.gov/releases/office-of-the-spokesperson/2026/05/president-donald-j-trump-secretary-of-state-marco-rubio-indian-external-affairs-minister-subrahmanyam-jaishankar-and-u-s-ambassador-to-india-sergio-gor-at-freedom-250-independence-day-reception/",
+      "www.presidentofindia.gov.in"
+    ],
+    "article_text": "the president of India is Mr Donald Trump. He used to be the president of America.",
+    "metadata": {},
+    "added_at": 1787156680.8496206
+  },
+  {
+    "id": 14,
+    "claim": "the president of India is Mr Donald Trump.",
+    "verdict": "fake",
+    "sources": [
+      "www.presidentofindia.gov.in/Profile",
+      "en.wikipedia.org/wiki/President_of_India",
+      "www.telegraphindia.com/india/pawan-khera-asks-donald-trump-to-take-cec-gyanesh-kumar-gupta-to-us-after-president-cites-indias-voter-id-system/cid/2175498",
+      "newsonair.gov.in/us-president-donald-trump-says-he-loves-india-and-calls-himself-a-big-fan-of-pm-modi/",
+      "www.presidentofindia.gov.in"
+    ],
+    "article_text": "the president of India is Mr Donald Trump. He used to be the president of America.",
+    "metadata": {},
+    "added_at": 1787156681.5597596
+  },
+  {
+    "id": 15,
+    "claim": "He used to be the president of America.",
+    "verdict": "fake",
+    "sources": [
+      "www.presidentofindia.gov.in/Profile",
+      "en.wikipedia.org/wiki/President_of_India",
+      "www.telegraphindia.com/india/pawan-khera-asks-donald-trump-to-take-cec-gyanesh-kumar-gupta-to-us-after-president-cites-indias-voter-id-system/cid/2175498",
+      "newsonair.gov.in/us-president-donald-trump-says-he-loves-india-and-calls-himself-a-big-fan-of-pm-modi/",
+      "www.presidentofindia.gov.in"
+    ],
+    "article_text": "the president of India is Mr Donald Trump. He used to be the president of America.",
+    "metadata": {},
+    "added_at": 1787156681.6168666
+  },
+  {
+    "id": 16,
+    "claim": "the president of India is Mr Modi.",
+    "verdict": "fake",
+    "sources": [],
+    "article_text": "the president of India is Mr Modi.",
+    "metadata": {},
+    "added_at": 1787156708.2530153
+  },
+  {
+    "id": 17,
+    "claim": "the president of India is Mr Narendra Modi.",
+    "verdict": "fake",
+    "sources": [
+      "www.presidentofindia.gov.in/Profile",
+      "en.wikipedia.org/wiki/President_of_India",
+      "www.presidentofindia.gov.in"
+    ],
+    "article_text": "the president of India is Mr Narendra Modi.",
+    "metadata": {},
+    "added_at": 1787156742.461349
+  },
+  {
+    "id": 18,
+    "claim": "the president of India is Mr Donald Trump",
+    "verdict": "fake",
+    "sources": [
+      "theconversation.com/donald-trump-was-once-indias-best-friend-how-did-it-all-go-wrong-264272",
+      "thehill.com/homenews/administration/6035569-trump-india-save-act/",
+      "www.thehindu.com/news/national/us-president-donald-trump-prime-minister-modi-phone-call-deepavali-updates/article70188666.ece",
+      "www.presidentofindia.gov.in",
+      "en.wikipedia.org/wiki/President_of_India"
+    ],
+    "article_text": "the president of India is Mr Donald Trump",
+    "metadata": {},
+    "added_at": 1787156915.0948281
+  },
+  {
+    "id": 19,
+    "claim": "the president of India is Mr Narendra Modi.",
+    "verdict": "fake",
+    "sources": [
+      "www.presidentofindia.gov.in/Profile",
+      "www.presidentofindia.gov.in",
+      "en.wikipedia.org/wiki/President_of_India",
+      "presidentofindia.nic.in/about-us"
+    ],
+    "article_text": "the president of India is Mr Narendra Modi.",
+    "metadata": {},
+    "added_at": 1787157088.5291822
+  },
+  {
+    "id": 20,
+    "claim": "the president of India is Mr Narendra Modi.",
+    "verdict": "fake",
+    "sources": [
+      "www.presidentofindia.gov.in/Profile",
+      "www.presidentofindia.gov.in",
+      "en.wikipedia.org/wiki/President_of_India"
+    ],
+    "article_text": "the president of India is Mr Narendra Modi.",
+    "metadata": {},
+    "added_at": 1787157101.1948254
+  },
+  {
+    "id": 21,
+    "claim": "the president of India is Mr Narendra Modi.",
+    "verdict": "fake",
+    "sources": [
+      "www.presidentofindia.gov.in/Profile",
+      "www.presidentofindia.gov.in",
+      "en.wikipedia.org/wiki/President_of_India"
+    ],
+    "article_text": "the president of India is Mr Narendra Modi.",
+    "metadata": {},
+    "added_at": 1787157103.236605
+  },
+  {
+    "id": 22,
+    "claim": "the president of India is Mr Narendra Modi.",
+    "verdict": "fake",
+    "sources": [
+      "www.presidentofindia.gov.in",
+      "www.presidentofindia.gov.in/Profile",
+      "en.wikipedia.org/wiki/President_of_India"
+    ],
+    "article_text": "the president of India is Mr Narendra Modi.",
+    "metadata": {},
+    "added_at": 1787157684.326831
+  },
+  {
+    "id": 23,
+    "claim": "the president of India is Mr Narendra Modi.",
+    "verdict": "fake",
+    "sources": [
+      "www.presidentofindia.gov.in",
+      "www.presidentofindia.gov.in/Profile",
+      "en.wikipedia.org/wiki/President_of_India"
+    ],
+    "article_text": "the president of India is Mr Narendra Modi.",
+    "metadata": {},
+    "added_at": 1787157686.2083728
+  },
+  {
+    "id": 24,
+    "claim": "the president of India is a woman.",
+    "verdict": "fake",
+    "sources": [],
+    "article_text": "the president of India is a woman.",
+    "metadata": {},
+    "added_at": 1787157717.1666832
+  },
+  {
+    "id": 25,
+    "claim": "The prime minister of india is Mr Narendra Modi",
+    "verdict": "fake",
+    "sources": [
+      "www.jagranjosh.com/general-knowledge/list-of-all-prime-ministers-of-india-1473165149-1",
+      "www.pmindia.gov.in/en/pms-profile/",
+      "www.narendramodi.in",
+      "en.wikipedia.org/wiki/Narendra_Modi",
+      "www.pmindia.gov.in/en/"
+    ],
+    "article_text": "The prime minister of india is Mr Narendra Modi",
+    "metadata": {},
+    "added_at": 1787157747.3768475
+  },
+  {
+    "id": 26,
+    "claim": "The prime minister of india is Mr Narendra Modi.",
+    "verdict": "fake",
+    "sources": [
+      "en.wikipedia.org/wiki/List_of_office-holders_in_the_Government_of_India",
+      "www.pmindia.gov.in/en/pms-profile/",
+      "www.narendramodi.in",
+      "vajiramandravi.com/current-affairs/prime-ministers-of-india/",
+      "www.pmindia.gov.in/en/"
+    ],
+    "article_text": "The prime minister of india is Mr Narendra Modi.",
+    "metadata": {},
+    "added_at": 1787157759.0693097
+  },
+  {
+    "id": 27,
+    "claim": "Narendra Modi is the prime minister of India.",
+    "verdict": "fake",
+    "sources": [
+      "www.pmindia.gov.in/en/pms-profile/",
+      "www.narendramodi.in",
+      "en.wikipedia.org/wiki/Narendra_Modi",
+      "www.pmindia.gov.in/en/",
+      "x.com/narendramodi"
+    ],
+    "article_text": "Narendra Modi is the prime minister of India.",
+    "metadata": {},
+    "added_at": 1787157812.6453962
+  },
+  {
+    "id": 28,
+    "claim": "Narendra Modi is the prime minister of India.",
+    "verdict": "fake",
+    "sources": [
+      "en.wikipedia.org/wiki/Premiership_of_Narendra_Modi",
+      "www.narendramodi.in",
+      "www.britannica.com/biography/Narendra-Modi",
+      "www.pmindia.gov.in/en/",
+      "x.com/narendramodi"
+    ],
+    "article_text": "Narendra Modi is the prime minister of India.",
+    "metadata": {},
+    "added_at": 1787157937.6031697
+  },
+  {
+    "id": 29,
+    "claim": "Narendra Modi is the prime minister of India.",
+    "verdict": "fake",
+    "sources": [
+      "www.pmindia.gov.in/en/pms-profile/",
+      "www.britannica.com/biography/Narendra-Modi",
+      "en.wikipedia.org/wiki/Narendra_Modi",
+      "www.narendramodi.in",
+      "www.pmindia.gov.in/en/"
+    ],
+    "article_text": "Narendra Modi is the prime minister of India.",
+    "metadata": {},
+    "added_at": 1787158117.6817632
+  },
+  {
+    "id": 30,
+    "claim": "Narendra Modi is the prime minister of India.",
+    "verdict": "fake",
+    "sources": [
+      "en.wikipedia.org/wiki/Premiership_of_Narendra_Modi",
+      "www.narendramodi.in",
+      "x.com/narendramodi",
+      "en.wikipedia.org/wiki/Narendra_Modi",
+      "www.britannica.com/biography/Narendra-Modi"
+    ],
+    "article_text": "Narendra Modi is the prime minister of India.",
+    "metadata": {},
+    "added_at": 1787158275.3635607
+  },
+  {
+    "id": 31,
+    "claim": "Narendra Modi is the prime minister of India.",
+    "verdict": "fake",
+    "sources": [
+      "www.britannica.com/biography/Narendra-Modi",
+      "en.wikipedia.org/wiki/Prime_Minister_of_India",
+      "www.pmindia.gov.in/en/pms-profile/",
+      "en.wikipedia.org/wiki/Narendra_Modi",
+      "x.com/narendramodi"
+    ],
+    "article_text": "Narendra Modi is the prime minister of India.",
+    "metadata": {},
+    "added_at": 1787158652.1365936
+  },
+  {
+    "id": 32,
+    "claim": "Narendra Modi is the prime minister of India.",
+    "verdict": "fake",
+    "sources": [
+      "www.pmindia.gov.in/en/pms-profile/",
+      "x.com/narendramodi",
+      "www.britannica.com/biography/Narendra-Modi",
+      "en.wikipedia.org/wiki/Narendra_Modi",
+      "www.narendramodi.in"
+    ],
+    "article_text": "Narendra Modi is the prime minister of India.",
+    "metadata": {},
+    "added_at": 1787158842.9083884
+  },
+  {
+    "id": 33,
+    "claim": "Narendra Modi is the prime minister of India.",
+    "verdict": "fake",
+    "sources": [
+      "www.pmindia.gov.in/en/",
+      "www.britannica.com/biography/Narendra-Modi",
+      "www.pmindia.gov.in/en/pms-profile/",
+      "en.wikipedia.org/wiki/Narendra_Modi",
+      "www.narendramodi.in"
+    ],
+    "article_text": "Narendra Modi is the prime minister of India.",
+    "metadata": {},
+    "added_at": 1787158920.197013
+  },
+  {
+    "id": 34,
+    "claim": "Narendra Modi is the prime minister of India.",
+    "verdict": "real",
+    "sources": [
+      "en.wikipedia.org/wiki/Prime_Minister_of_India",
+      "www.pmindia.gov.in/en/",
+      "www.britannica.com/biography/Narendra-Modi",
+      "www.narendramodi.in",
+      "www.pmindia.gov.in/en/pms-profile/"
+    ],
+    "article_text": "Narendra Modi is the prime minister of India.",
+    "metadata": {},
+    "added_at": 1787159051.0700045
+  },
+  {
+    "id": 35,
+    "claim": "Narendra Modi is the prime minister of India.",
+    "verdict": "real",
+    "sources": [
+      "www.britannica.com/biography/Narendra-Modi",
+      "x.com/narendramodi",
+      "en.wikipedia.org/wiki/Narendra_Modi",
+      "www.instagram.com/narendramodi/",
+      "www.pmindia.gov.in/en/pms-profile/"
+    ],
+    "article_text": "Narendra Modi is the prime minister of India.",
+    "metadata": {},
+    "added_at": 1787159078.3514996
+  },
+  {
+    "id": 36,
+    "claim": "the president of India is Mr Donald Trump",
+    "verdict": "fake",
+    "sources": [
+      "www.cnbctv18.com/world/donald-trump-invokes-indias-cec-gyanesh-kumar-while-urging-for-save-america-act-to-be-passed-in-us-19971407.htm",
+      "www.thehindu.com/news/national/us-president-donald-trump-prime-minister-modi-phone-call-deepavali-updates/article70188666.ece",
+      "www.presidentofindia.gov.in/Profile",
+      "en.wikipedia.org/wiki/President_of_India",
+      "www.thehindu.com/news/international/us-president-donald-trump-on-relationship-with-india-and-pm-modi/article70068525.ece"
+    ],
+    "article_text": "the president of India is Mr Donald Trump",
+    "metadata": {},
+    "added_at": 1787159081.7366283
+  },
+  {
+    "id": 37,
+    "claim": "Narendra Modi is the prime minister of India.",
+    "verdict": "real",
+    "sources": [
+      "www.pmindia.gov.in/en/",
+      "www.britannica.com/biography/Narendra-Modi",
+      "en.wikipedia.org/wiki/Prime_Minister_of_India",
+      "en.wikipedia.org/wiki/Narendra_Modi",
+      "x.com/narendramodi"
+    ],
+    "article_text": "Narendra Modi is the prime minister of India.",
+    "metadata": {},
+    "added_at": 1787159174.8115427
+  },
+  {
+    "id": 38,
+    "claim": "Narendra Modi is the prime minister of India.",
+    "verdict": "real",
+    "sources": [
+      "www.pmindia.gov.in/en/",
+      "www.britannica.com/biography/Narendra-Modi",
+      "en.wikipedia.org/wiki/Narendra_Modi",
+      "x.com/narendramodi",
+      "www.instagram.com/narendramodi/"
+    ],
+    "article_text": "Narendra Modi is the prime minister of India.",
+    "metadata": {},
+    "added_at": 1787159176.7068517
+  }
+]

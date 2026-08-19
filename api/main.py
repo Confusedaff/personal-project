@@ -31,6 +31,7 @@ from typing import Any
 import joblib
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -54,6 +55,15 @@ from agents.feedback import get_feedback_loop
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("fakenews.api")
+
+# Pre-warm knowledge base (lazy model loading happens in background)
+logger.info("Pre-loading knowledge base...")
+try:
+    kb = get_knowledge_base()
+    kb._ensure_model()
+    logger.info("Knowledge base ready.")
+except Exception as e:
+    logger.warning(f"Knowledge base pre-load failed (non-fatal): {e}")
 
 app = FastAPI(
     title="Fake News Detection API — Multi-Agent System",
@@ -146,6 +156,17 @@ def _load_report(name: str):
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────
+
+DASHBOARD_PATH = ROOT / "dashboard" / "index.html"
+
+
+@app.get("/", response_class=HTMLResponse)
+def dashboard():
+    """Serve the analyst dashboard (avoids CORS issues with file:// URLs)."""
+    if not DASHBOARD_PATH.exists():
+        raise HTTPException(status_code=503, detail="Dashboard not built. Run src/build_dashboard.py.")
+    return HTMLResponse(content=DASHBOARD_PATH.read_text(encoding="utf-8"))
+
 
 @app.get("/health")
 def health():

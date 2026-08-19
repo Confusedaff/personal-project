@@ -1,5 +1,6 @@
-<!-- Fake News Detection — Analyst Desk dashboard. Self-contained: embeds all computed
-     reports plus a compact client-side model so predictions run with no backend. -->
+<!-- Fake News Detection — Analyst Desk dashboard. v2.0: Multi-agent system.
+     Wires the live desk to /analyze (multi-agent) with fallback to /predict (legacy)
+     and in-browser model. -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,400;0,500;0,600;1,500&family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -20,6 +21,7 @@
   --fake: #e2604f;
   --fake-dim: #3a2924;
   --amber: #e8a83d;
+  --amber-dim: #3a3020;
   font-family: 'Space Grotesk', sans-serif;
   background: var(--bg);
   color: var(--text-primary);
@@ -68,12 +70,15 @@
   font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
   color: var(--text-muted); margin-bottom: 10px;
 }
-#fnd-root textarea#fnd-input {
-  width: 100%; min-height: 96px; resize: vertical; background: var(--bg); color: var(--text-primary);
+#fnd-root textarea#fnd-input, #fnd-root input#fnd-url {
+  width: 100%; background: var(--bg); color: var(--text-primary);
   border: 1px solid var(--border-strong); border-radius: 8px; padding: 14px; font-size: 14px;
   font-family: 'Space Grotesk', sans-serif; line-height: 1.55; outline: none;
 }
-#fnd-root textarea#fnd-input:focus { border-color: var(--real); }
+#fnd-root textarea#fnd-input { min-height: 96px; resize: vertical; }
+#fnd-root textarea#fnd-input:focus, #fnd-root input#fnd-url:focus { border-color: var(--real); }
+#fnd-root input#fnd-url { height: 42px; margin-bottom: 10px; font-size: 13px; }
+#fnd-root input#fnd-url::placeholder { color: var(--text-muted); }
 #fnd-root .desk-row { display: flex; align-items: center; gap: 14px; margin-top: 14px; flex-wrap: wrap; }
 #fnd-root button#fnd-run {
   font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; letter-spacing: 0.06em; text-transform: uppercase;
@@ -88,16 +93,19 @@
 #fnd-root .verdict-block { margin-top: 20px; display: none; }
 #fnd-root .verdict-line {
   font-family: 'IBM Plex Mono', monospace; font-size: 15px; color: var(--text-primary);
-  border-left: 3px solid var(--border-strong); padding-left: 14px; min-height: 22px; white-space: pre;
+  border-left: 3px solid var(--border-strong); padding-left: 14px; min-height: 22px; white-space: pre-wrap;
 }
 #fnd-root .verdict-line .cursor { display: inline-block; width: 8px; background: var(--amber); animation: fnd-blink 1s step-end infinite; }
 @keyframes fnd-blink { 50% { opacity: 0; } }
 #fnd-root .verdict-line.real { border-left-color: var(--real); }
 #fnd-root .verdict-line.fake { border-left-color: var(--fake); }
+#fnd-root .verdict-line.uncertain { border-left-color: var(--amber); }
 
 #fnd-root .source-badge { display: inline-block; font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing: 0.04em; text-transform: uppercase; padding: 2px 8px; border-radius: 3px; margin-left: 2px; border: 1px solid var(--text-muted); color: var(--text-muted); }
 #fnd-root .source-badge.live { border-color: var(--real); color: var(--real); }
 #fnd-root .source-badge.fallback { border-color: var(--amber); color: var(--amber); }
+#fnd-root .source-badge.multi-agent { border-color: #7c6dff; color: #7c6dff; }
+
 #fnd-root .prob-bars { margin-top: 16px; display: flex; flex-direction: column; gap: 10px; }
 #fnd-root .prob-row { display: grid; grid-template-columns: 46px 1fr 52px; align-items: center; gap: 10px; }
 #fnd-root .prob-label { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--text-secondary); }
@@ -107,6 +115,42 @@
 #fnd-root .prob-fill.real { background: var(--real); }
 #fnd-root .prob-pct { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--text-secondary); text-align: right; }
 #fnd-root .desk-footnote { font-size: 11.5px; color: var(--text-muted); margin-top: 16px; line-height: 1.5; }
+
+/* Agent breakdown */
+#fnd-root .agents-grid { margin-top: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+#fnd-root .agent-card {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 14px;
+  font-size: 12.5px; line-height: 1.5;
+}
+#fnd-root .agent-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+#fnd-root .agent-name { font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-muted); }
+#fnd-root .agent-label {
+  font-family: 'IBM Plex Mono', monospace; font-size: 11px; font-weight: 500;
+  padding: 1px 7px; border-radius: 3px; text-transform: uppercase;
+}
+#fnd-root .agent-label.real { background: var(--real-dim); color: var(--real); }
+#fnd-root .agent-label.fake { background: var(--fake-dim); color: var(--fake); }
+#fnd-root .agent-label.uncertain { background: var(--amber-dim); color: var(--amber); }
+#fnd-root .agent-reasoning { color: var(--text-secondary); font-size: 12px; }
+#fnd-root .agent-time { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--text-muted); margin-top: 4px; }
+
+/* Evidence trail */
+#fnd-root .evidence-block { margin-top: 16px; }
+#fnd-root .evidence-title { font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px; }
+#fnd-root .evidence-item {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px;
+  margin-bottom: 6px; font-size: 12px; color: var(--text-secondary); line-height: 1.5;
+}
+#fnd-root .evidence-item .ev-agent { font-family: 'IBM Plex Mono', monospace; color: var(--text-muted); font-size: 10px; text-transform: uppercase; }
+#fnd-root .evidence-item .ev-text { margin-top: 3px; }
+
+/* Review status */
+#fnd-root .review-badge {
+  display: inline-flex; align-items: center; gap: 6px; margin-top: 12px;
+  font-family: 'IBM Plex Mono', monospace; font-size: 11px; padding: 6px 12px;
+  border-radius: 6px; border: 1px solid var(--amber); background: var(--amber-dim); color: var(--amber);
+}
+#fnd-root .review-badge .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--amber); }
 
 /* Model bench */
 #fnd-root .bench-chart-wrap { height: 260px; margin-bottom: 18px; }
@@ -160,6 +204,7 @@
   #fnd-root .cat-row { grid-template-columns: 100px 1fr 60px; }
   #fnd-root .cat-n { display: none; }
   #fnd-root .cm-grid { grid-template-columns: 90px 1fr 1fr; }
+  #fnd-root .agents-grid { grid-template-columns: 1fr; }
 }
 </style>
 
@@ -168,19 +213,22 @@
 
   <p class="eyebrow">Use case #15 &middot; GenAI &amp; security</p>
   <h1>Fake news detection<br><em>analyst desk</em></h1>
-  <p class="sub">TF-IDF features benchmarked across four classical classifiers on the Kaggle Fake and Real News Dataset. The best model ships behind a REST API; this desk shows how it performs and lets you try it live.</p>
+  <p class="sub">Multi-agent misinformation detection: claim extraction, fact-checking, source credibility, media forensics, and bias analysis — all orchestrated into one verdict with a transparent evidence trail.</p>
   <div class="ticker" id="fnd-ticker"></div>
 
+  <!-- ── LIVE DESK ── -->
   <section aria-labelledby="fnd-live-h">
     <h2 id="fnd-live-h" class="sr-only">Live prediction demo</h2>
     <div class="desk">
-      <div class="desk-label">Wire intake — paste a headline or article</div>
-      <textarea id="fnd-input" placeholder="Paste a headline and/or a few sentences of article text here...">Scientists at the university published a peer-reviewed study on regional climate patterns in the journal Nature this week, based on two decades of satellite data.</textarea>
+      <div class="desk-label">Wire intake — paste a URL or article text</div>
+      <input type="url" id="fnd-url" placeholder="https://example.com/article (optional — the backend will scrape it)">
+      <textarea id="fnd-input" placeholder="Or paste article text directly here...">Scientists at the university published a peer-reviewed study on regional climate patterns in the journal Nature this week, based on two decades of satellite data.</textarea>
       <div class="desk-row">
         <button id="fnd-run">Run analysis</button>
-        <span class="desk-hint" id="fnd-source-hint">Checking backend&hellip;</span>
+        <span class="desk-hint" id="fnd-source-hint">Checking backend...</span>
       </div>
       <div class="error-msg" id="fnd-error">Type or paste some article text first.</div>
+
       <div class="verdict-block" id="fnd-verdict-block">
         <div class="verdict-line" id="fnd-verdict-line"></div>
         <span class="source-badge" id="fnd-source-badge"></span>
@@ -196,11 +244,32 @@
             <span class="prob-pct" id="fnd-pct-real">0%</span>
           </div>
         </div>
+
+        <!-- Agent breakdown grid (multi-agent mode only) -->
+        <div id="fnd-agents-section" style="display:none">
+          <div style="margin-top:20px;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Agent signals</div>
+          <div class="agents-grid" id="fnd-agents-grid"></div>
+        </div>
+
+        <!-- Evidence trail (multi-agent mode only) -->
+        <div id="fnd-evidence-section" style="display:none">
+          <div class="evidence-block">
+            <div class="evidence-title">Evidence trail</div>
+            <div id="fnd-evidence-list"></div>
+          </div>
+        </div>
+
+        <!-- Human review badge -->
+        <div id="fnd-review-section" style="display:none">
+          <div class="review-badge"><span class="dot"></span> <span id="fnd-review-text">Routed to human review</span></div>
+        </div>
+
+        <div class="desk-footnote" id="fnd-footnote"></div>
       </div>
-      <div class="desk-footnote">Calls the production API (Linear SVM, 30,000 features, test F1 0.994) at <span style="color:var(--text-secondary)" id="fnd-api-base-label">&mdash;</span> for each prediction. If the API is unreachable, the desk automatically falls back to a compact 3,500-term logistic regression (test F1 0.986) bundled for in-browser scoring — see <span style="color:var(--text-secondary)">api/main.py</span> and <span style="color:var(--text-secondary)">src/export_js_model.py</span>.</div>
     </div>
   </section>
 
+  <!-- ── MODEL BENCH ── -->
   <section aria-labelledby="fnd-bench-h">
     <div class="sec-head">
       <h2 id="fnd-bench-h" class="sec-title">Model bench</h2>
@@ -212,6 +281,7 @@
     </div>
   </section>
 
+  <!-- ── CONFUSION MATRIX ── -->
   <section aria-labelledby="fnd-cm-h">
     <div class="sec-head">
       <h2 id="fnd-cm-h" class="sec-title">Where the production model errs</h2>
@@ -220,6 +290,7 @@
     <div class="cm-grid" id="fnd-cm-grid"></div>
   </section>
 
+  <!-- ── CATEGORY BREAKDOWN ── -->
   <section aria-labelledby="fnd-cat-h">
     <div class="sec-head">
       <h2 id="fnd-cat-h" class="sec-title">Accuracy by subject line</h2>
@@ -228,29 +299,30 @@
     <div class="panel" id="fnd-cat-list"></div>
   </section>
 
+  <!-- ── TREND ── -->
   <section aria-labelledby="fnd-trend-h">
     <div class="sec-head">
       <h2 id="fnd-trend-h" class="sec-title">Corpus volume over time</h2>
-      <p class="sec-desc">Monthly fake vs. real article counts across the full training corpus (2015&ndash;2018) &mdash; a historical view of the training data, not live traffic.</p>
+      <p class="sec-desc">Monthly fake vs. real article counts across the full training corpus (2015&ndash;2018) — a historical view of the training data, not live traffic.</p>
     </div>
     <div class="panel"><div class="trend-chart-wrap"><canvas id="fnd-trend-chart"></canvas></div></div>
   </section>
 
+  <!-- ── EDITOR'S NOTE ── -->
   <section aria-labelledby="fnd-note-h">
     <h2 id="fnd-note-h" class="sr-only">Editor's note on limitations</h2>
     <div class="note">
-      <div class="note-title">Editor's note &mdash; read before deploying</div>
-      <p>Reuters wire copy in this corpus almost always opens with a dateline like <span class="fig">WASHINGTON (Reuters) &mdash;</span> that a classifier can key on instead of learning anything about content. We tested this directly:</p>
+      <div class="note-title">Editor's note — read before deploying</div>
+      <p>The multi-agent system adds factual verification on top of the original style-based classifier. However, limitations remain: the ML classifier agent still carries source-style bias (weight: 15%), the fact-check agent requires API keys and internet access, and the media forensics agent's reverse image search is a stub. The credibility list reflects editorial judgment. See <span class="fig">docs/limitations.md</span> for the full list.</p>
       <table class="ablation-table" id="fnd-ablation-table"></table>
-      <p>Stripping the dateline (and any leftover "Reuters" mentions) removes the biggest shortcut and costs about half a point of accuracy &mdash; the residual is attributable to genuine content and style signal, but part of that remaining signal is still Reuters' own house style (formal attribution, weekday-dated reporting, Washington political coverage), not misinformation itself.</p>
-      <p>A second artifact: every <span class="fig">subject</span> tag in this corpus belongs to exactly one class &mdash; <span class="fig">politicsNews</span> and <span class="fig">worldnews</span> are 100% real, the other six tags are 100% fake. The model doesn't use <span class="fig">subject</span> as a feature for exactly this reason, but the category breakdown below should be read as "accuracy within a single-class bucket," not a real per-topic difficulty signal. The corpus also skews heavily to political and world-news topics overall. Treat predictions as a triage signal for human fact-checkers, not an automated takedown mechanism. Full write-up: <span class="fig">docs/limitations.md</span>.</p>
+      <p>Treat predictions as a <span class="fig">triage signal for human fact-checkers</span>, not an automated takedown mechanism. The orchestrator routes low-confidence or conflicting cases to a human review queue.</p>
     </div>
   </section>
 
   <footer>
     <div><b>Data</b> Kaggle Fake and Real News Dataset &middot; True.csv + Fake.csv &middot; 44,889 articles after cleaning</div>
-    <div><b>Pipeline</b> src/preprocessing.py &middot; src/train.py &middot; src/ablation_dateline.py &middot; src/export_js_model.py</div>
-    <div><b>Serving</b> api/main.py (FastAPI) &middot; this dashboard: dashboard/index.html</div>
+    <div><b>Pipeline</b> src/preprocessing.py &middot; src/train.py &middot; agents/*.py</div>
+    <div><b>Serving</b> api/main.py (FastAPI) &middot; /analyze (multi-agent) + /predict (legacy) &middot; this dashboard: dashboard/index.html</div>
   </footer>
 
 </div>
@@ -260,7 +332,7 @@
 (function() {
   const DATA = __EMBEDDED_DATA__;
 
-  // ---------- ticker ----------
+  // ── Ticker ──
   const mc = DATA.modelComparison;
   const best = mc.best_model;
   const bestStats = mc.results[best];
@@ -268,9 +340,16 @@
     `<span><b>${mc.n_train + mc.n_test}</b> articles indexed</span>` +
     `<span>production model <b>${best}</b></span>` +
     `<span>test F1 <b>${bestStats.f1_weighted}</b></span>` +
-    `<span>vocab <b>${mc.n_features.toLocaleString()}</b> terms</span>`;
+    `<span>agents <b>8</b></span>`;
 
-  // ---------- live prediction ----------
+  // ── Config ──
+  const urlApiParam = new URLSearchParams(window.location.search).get('api');
+  const API_BASE = (urlApiParam || window.FND_API_BASE || 'http://127.0.0.1:8000').replace(/\/$/, '');
+  const ANALYZE_TIMEOUT_MS = 15000;
+  document.getElementById('fnd-footnote').textContent =
+    `Multi-agent analysis via ${API_BASE}/analyze — runs claim extraction, fact-checking, source credibility, media forensics, and bias analysis, then orchestrates a single verdict.`;
+
+  // ── In-browser fallback model ──
   const STOP = new Set(DATA.stopwords);
   const TERMS = DATA.jsModel.terms;
   const INTERCEPT = DATA.jsModel.intercept;
@@ -286,7 +365,7 @@
     return t;
   }
 
-  function predict(raw) {
+  function predictLocal(raw) {
     const cleaned = cleanText(raw);
     if (!cleaned) return null;
     const tokens = cleaned.split(' ').filter(t => t && !STOP.has(t));
@@ -305,16 +384,15 @@
     }
     const norm = Math.sqrt(sumSq) || 1;
     let z = INTERCEPT;
-    let matched = 0;
     for (const t in vals) {
       const [, coef] = TERMS[t];
       z += (vals[t] / norm) * coef;
-      matched++;
     }
     const pReal = 1 / (1 + Math.exp(-z));
-    return { pReal, pFake: 1 - pReal, matched, tokenCount: tokens.length };
+    return { pReal, pFake: 1 - pReal, tokenCount: tokens.length };
   }
 
+  // ── Typewriter effect ──
   function typewrite(el, text, cls) {
     el.className = 'verdict-line ' + cls;
     el.textContent = '';
@@ -333,6 +411,7 @@
     step();
   }
 
+  // ── DOM refs ──
   const runBtn = document.getElementById('fnd-run');
   const input = document.getElementById('fnd-input');
   const errorMsg = document.getElementById('fnd-error');
@@ -340,28 +419,23 @@
   const verdictLine = document.getElementById('fnd-verdict-line');
   const sourceBadge = document.getElementById('fnd-source-badge');
   const sourceHint = document.getElementById('fnd-source-hint');
-  const apiBaseLabel = document.getElementById('fnd-api-base-label');
+  const agentsSection = document.getElementById('fnd-agents-section');
+  const agentsGrid = document.getElementById('fnd-agents-grid');
+  const evidenceSection = document.getElementById('fnd-evidence-section');
+  const evidenceList = document.getElementById('fnd-evidence-list');
+  const reviewSection = document.getElementById('fnd-review-section');
+  const reviewText = document.getElementById('fnd-review-text');
+  const urlInput = document.getElementById('fnd-url');
 
-  // ---------- backend wiring ----------
-  // Resolve the API base at load time so this static file can point at
-  // whatever backend the user is actually running, without a rebuild:
-  //   1. ?api=https://your-api.example.com   (query param, highest priority)
-  //   2. window.FND_API_BASE                 (set this in a <script> tag
-  //                                            before this file loads)
-  //   3. http://127.0.0.1:8000               (default: local `uvicorn` dev server)
-  const urlApiParam = new URLSearchParams(window.location.search).get('api');
-  const API_BASE = (urlApiParam || window.FND_API_BASE || 'http://127.0.0.1:8000').replace(/\/$/, '');
-  const PREDICT_TIMEOUT_MS = 4000;
-  apiBaseLabel.textContent = API_BASE;
-
-  async function predictViaBackend(title, text) {
+  // ── Backend: /analyze (multi-agent) ──
+  async function analyzeViaBackend(text, url) {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), PREDICT_TIMEOUT_MS);
+    const timer = setTimeout(() => controller.abort(), ANALYZE_TIMEOUT_MS);
     try {
-      const res = await fetch(`${API_BASE}/predict`, {
+      const res = await fetch(`${API_BASE}/analyze`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: title || '', text: text }),
+        body: JSON.stringify({ title: '', text: text, url: url || '' }),
         signal: controller.signal,
       });
       if (!res.ok) {
@@ -369,20 +443,32 @@
         try { detail = (await res.json()).detail || ''; } catch (_) {}
         throw new Error(detail || `API returned ${res.status}`);
       }
-      const data = await res.json();
-      // Shape returned by api/main.py's PredictResponse.
-      return {
-        pFake: data.fake_probability,
-        pReal: data.real_probability,
-        modelUsed: data.model_used,
-      };
+      return await res.json();
     } finally {
       clearTimeout(timer);
     }
   }
 
-  // Quick liveness probe on load, purely to set the hint text up front —
-  // the actual per-request fallback logic below never depends on this.
+  // ── Backend: /predict (legacy fallback) ──
+  async function predictViaBackend(text) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 4000);
+    try {
+      const res = await fetch(`${API_BASE}/predict`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: '', text: text }),
+        signal: controller.signal,
+      });
+      if (!res.ok) throw new Error(`API ${res.status}`);
+      return await res.json();
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  // ── Health probe ──
+  let backendReachable = false;
   (async function checkBackend() {
     try {
       const controller = new AbortController();
@@ -390,42 +476,107 @@
       const res = await fetch(`${API_BASE}/health`, { signal: controller.signal });
       clearTimeout(timer);
       if (res.ok) {
-        sourceHint.textContent = `Connected to backend at ${API_BASE}.`;
+        const data = await res.json();
+        sourceHint.textContent = `Connected to ${API_BASE} (${data.version || 'v1'})`;
+        backendReachable = true;
         return;
       }
-    } catch (_) { /* fall through to offline message */ }
+    } catch (_) {}
     sourceHint.textContent = `Backend not reachable at ${API_BASE} — using in-browser backup model.`;
   })();
 
+  // ── Render agent breakdown ──
+  function renderAgents(agentResults) {
+    const specialistNames = ['ml_classifier', 'fact_check', 'source_credibility', 'media_forensics', 'bias_sentiment'];
+    const specialists = agentResults.filter(r => specialistNames.includes(r.agent));
+
+    if (specialists.length === 0) {
+      agentsSection.style.display = 'none';
+      return;
+    }
+
+    agentsSection.style.display = 'block';
+    agentsGrid.innerHTML = specialists.map(r => {
+      const labelClass = r.label === 'real' ? 'real' : r.label === 'fake' ? 'fake' : 'uncertain';
+      const time = r.elapsed_ms ? ` · ${Math.round(r.elapsed_ms)}ms` : '';
+      return `
+        <div class="agent-card">
+          <div class="agent-card-header">
+            <span class="agent-name">${r.agent.replace(/_/g, ' ')}</span>
+            <span class="agent-label ${labelClass}">${r.label}</span>
+          </div>
+          <div class="agent-reasoning">${escapeHtml(r.reasoning)}</div>
+          <div class="agent-time">confidence ${(r.confidence * 100).toFixed(0)}%${time}</div>
+        </div>`;
+    }).join('');
+  }
+
+  // ── Render evidence trail ──
+  function renderEvidence(evidenceTrail) {
+    if (!evidenceTrail || evidenceTrail.length === 0) {
+      evidenceSection.style.display = 'none';
+      return;
+    }
+    evidenceSection.style.display = 'block';
+    evidenceList.innerHTML = evidenceTrail.map(e => {
+      const agentLabel = e.agent ? `<div class="ev-agent">${e.agent.replace(/_/g, ' ')}</div>` : '';
+      const text = e.reasoning || JSON.stringify(e);
+      return `<div class="evidence-item">${agentLabel}<div class="ev-text">${escapeHtml(text)}</div></div>`;
+    }).join('');
+  }
+
+  function escapeHtml(s) {
+    if (!s) return '';
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  // ── Main analysis function ──
   async function runAnalysis() {
     const raw = input.value;
-    const rawForLocal = raw; // local model cleans title+body together already
-
-    if (!raw || !raw.trim()) {
+    const url = urlInput.value.trim();
+    if ((!raw || !raw.trim()) && !url) {
       errorMsg.style.display = 'block';
       verdictBlock.style.display = 'none';
       return;
     }
 
     runBtn.disabled = true;
-    runBtn.textContent = 'Analyzing…';
+    runBtn.textContent = 'Analyzing...';
 
     let result = null;
-    let source = null; // 'live' | 'fallback'
-    let modelUsed = null;
+    let source = null;
+    let analyzeData = null;
 
-    try {
-      const live = await predictViaBackend('', raw);
-      result = { pFake: live.pFake, pReal: live.pReal, tokenCount: 1 };
-      source = 'live';
-      modelUsed = live.modelUsed;
-    } catch (err) {
-      // Backend down, slow, CORS-blocked, or erroring — fall back to the
-      // baked-in 3,500-term model so the demo still works instantly.
-      console.warn('Backend prediction failed, falling back to local model:', err);
-      const local = predict(rawForLocal);
+    // Try multi-agent /analyze first
+    if (backendReachable) {
+      try {
+        analyzeData = await analyzeViaBackend(raw || '', url);
+        result = {
+          pFake: analyzeData.label === 'fake' ? analyzeData.confidence : 1 - analyzeData.confidence,
+          pReal: analyzeData.label === 'real' ? analyzeData.confidence : 1 - analyzeData.confidence,
+        };
+        source = 'multi-agent';
+      } catch (err) {
+        console.warn('Multi-agent analyze failed, trying legacy /predict:', err);
+      }
+    }
+
+    // Fallback to legacy /predict
+    if (!result && backendReachable) {
+      try {
+        const legacy = await predictViaBackend(raw);
+        result = { pFake: legacy.fake_probability, pReal: legacy.real_probability };
+        source = 'live';
+      } catch (err) {
+        console.warn('Legacy predict failed, falling back to local model:', err);
+      }
+    }
+
+    // Fallback to in-browser model
+    if (!result) {
+      const local = predictLocal(raw);
       if (local && local.tokenCount > 0) {
-        result = { pFake: local.pFake, pReal: local.pReal, tokenCount: local.tokenCount };
+        result = { pFake: local.pFake, pReal: local.pReal };
         source = 'fallback';
       }
     }
@@ -433,54 +584,81 @@
     runBtn.disabled = false;
     runBtn.textContent = 'Run analysis';
 
-    if (!result || result.tokenCount === 0) {
-      errorMsg.textContent = source === 'fallback'
-        ? 'Type or paste some article text first.'
-        : 'Could not get a prediction from the backend or the backup model. Try again.';
+    if (!result) {
+      errorMsg.textContent = 'Could not get a prediction. Try again.';
       errorMsg.style.display = 'block';
       verdictBlock.style.display = 'none';
       return;
     }
 
+    // ── Render verdict ──
     errorMsg.style.display = 'none';
     const label = result.pReal >= result.pFake ? 'REAL' : 'FAKE';
     const confidence = Math.round(Math.max(result.pReal, result.pFake) * 100);
     verdictBlock.style.display = 'block';
     typewrite(verdictLine, `VERDICT: ${label} \u00b7 confidence ${confidence}%`, label.toLowerCase());
 
-    if (source === 'live') {
+    // Source badge
+    if (source === 'multi-agent') {
+      sourceBadge.className = 'source-badge multi-agent';
+      sourceBadge.textContent = 'multi-agent \u00b7 5 agents + orchestrator';
+    } else if (source === 'live') {
       sourceBadge.className = 'source-badge live';
-      sourceBadge.textContent = `live \u00b7 ${modelUsed || 'backend model'}`;
-      sourceHint.textContent = `Connected to backend at ${API_BASE}.`;
+      sourceBadge.textContent = `live \u00b7 ${best}`;
     } else {
       sourceBadge.className = 'source-badge fallback';
       sourceBadge.textContent = 'backup \u00b7 in-browser model';
-      sourceHint.textContent = `Backend not reachable at ${API_BASE} — using in-browser backup model.`;
     }
 
+    // Probability bars
     requestAnimationFrame(() => {
       document.getElementById('fnd-bar-fake').style.width = Math.round(result.pFake * 100) + '%';
       document.getElementById('fnd-bar-real').style.width = Math.round(result.pReal * 100) + '%';
       document.getElementById('fnd-pct-fake').textContent = Math.round(result.pFake * 100) + '%';
       document.getElementById('fnd-pct-real').textContent = Math.round(result.pReal * 100) + '%';
     });
+
+    // ── Multi-agent extras ──
+    if (analyzeData) {
+      renderAgents(analyzeData.agent_results || []);
+      renderEvidence(analyzeData.evidence_trail || []);
+
+      if (analyzeData.needs_human_review) {
+        reviewSection.style.display = 'block';
+        reviewText.textContent = analyzeData.review_reason || 'Routed to human review (low confidence or agent conflict)';
+      } else {
+        reviewSection.style.display = 'none';
+      }
+    } else {
+      agentsSection.style.display = 'none';
+      evidenceSection.style.display = 'none';
+      reviewSection.style.display = 'none';
+    }
   }
 
   runBtn.addEventListener('click', runAnalysis);
-  runAnalysis();
 
-  // ---------- model bench chart ----------
+  // Auto-run on load (only if backend is reachable, otherwise wait)
+  const loadCheck = setInterval(() => {
+    if (backendReachable || !navigator.onLine) {
+      clearInterval(loadCheck);
+      runAnalysis();
+    }
+  }, 200);
+  // Fallback: run after 3s regardless
+  setTimeout(() => { clearInterval(loadCheck); runAnalysis(); }, 3000);
+
+  // ── Static charts ──
+
+  // Model bench
   const modelNames = Object.keys(mc.results);
-  const accData = modelNames.map(n => mc.results[n].accuracy);
-  const f1Data = modelNames.map(n => mc.results[n].f1_weighted);
-
   new Chart(document.getElementById('fnd-bench-chart'), {
     type: 'bar',
     data: {
       labels: modelNames,
       datasets: [
-        { label: 'Accuracy', data: accData, backgroundColor: '#4fb3a0', borderRadius: 4, maxBarThickness: 34 },
-        { label: 'F1 (weighted)', data: f1Data, backgroundColor: '#e8a83d', borderRadius: 4, maxBarThickness: 34 },
+        { label: 'Accuracy', data: modelNames.map(n => mc.results[n].accuracy), backgroundColor: '#4fb3a0', borderRadius: 4, maxBarThickness: 34 },
+        { label: 'F1 (weighted)', data: modelNames.map(n => mc.results[n].f1_weighted), backgroundColor: '#e8a83d', borderRadius: 4, maxBarThickness: 34 },
       ]
     },
     options: {
@@ -493,16 +671,14 @@
     }
   });
 
-  const chipsEl = document.getElementById('fnd-bench-chips');
-  chipsEl.innerHTML = modelNames.map(n => {
+  document.getElementById('fnd-bench-chips').innerHTML = modelNames.map(n => {
     const r = mc.results[n];
-    const winner = n === best ? ' winner' : '';
-    return `<span class="chip${winner}"><b>${n}</b> &middot; acc ${r.accuracy} &middot; F1 ${r.f1_weighted}</span>`;
+    return `<span class="chip${n === best ? ' winner' : ''}"><b>${n}</b> &middot; acc ${r.accuracy} &middot; F1 ${r.f1_weighted}</span>`;
   }).join('');
 
-  // ---------- confusion matrix ----------
+  // Confusion matrix
   const cm = DATA.confusion[best];
-  const [[tf, ff], [fr, tr]] = cm.matrix; // rows: actual fake / actual real; cols: pred fake / pred real
+  const [[tf, ff], [fr, tr]] = cm.matrix;
   document.getElementById('fnd-cm-grid').innerHTML = `
     <div class="cm-cell head"></div>
     <div class="cm-cell head">Predicted fake</div>
@@ -515,7 +691,7 @@
     <div class="cm-cell correct"><div class="cm-num">${tr.toLocaleString()}</div><div class="cm-cap">correctly passed</div></div>
   `;
 
-  // ---------- category breakdown ----------
+  // Category breakdown
   const cats = DATA.category.slice().sort((a, b) => b.n - a.n);
   document.getElementById('fnd-cat-list').innerHTML = cats.map(c => `
     <div class="cat-row">
@@ -526,7 +702,7 @@
     </div>
   `).join('');
 
-  // ---------- trend chart ----------
+  // Trend chart
   const trend = DATA.trend;
   new Chart(document.getElementById('fnd-trend-chart'), {
     type: 'line',
@@ -547,7 +723,7 @@
     }
   });
 
-  // ---------- ablation table ----------
+  // Ablation table
   const ab = DATA.ablation;
   document.getElementById('fnd-ablation-table').innerHTML = `
     <tr><th>Setting</th><th>Accuracy</th><th>F1</th><th>Top terms favoring "real"</th></tr>
