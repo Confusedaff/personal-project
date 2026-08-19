@@ -897,5 +897,303 @@
     "human_notes": "",
     "added_at": 1787159081.7335293,
     "reviewed_at": null
+  },
+  {
+    "id": 13,
+    "article": {
+      "title": "",
+      "url": "",
+      "source_domain": ""
+    },
+    "verdict": {
+      "agent": "orchestrator",
+      "label": "fake",
+      "confidence": 0.95,
+      "reasoning": "Orchestrated verdict: fake (confidence=0.950). Agent signals: [ml_classifier=real(0.91), fact_check=fake(0.95), source_credibility=uncertain(0.00), media_forensics=uncertain(0.10), bias_sentiment=real(0.40)]. Override applied: True. Human review needed: True",
+      "evidence": [
+        {
+          "agent": "ml_classifier",
+          "label": "real",
+          "confidence": 0.9115128603413319,
+          "weight": 0.15,
+          "effective_weight": 0.1367,
+          "reasoning": "TF-IDF + Linear SVM: P(fake)=0.088, P(real)=0.912. Classifies based on writing style and vocabulary patterns."
+        },
+        {
+          "agent": "fact_check",
+          "label": "fake",
+          "confidence": 0.95,
+          "weight": 0.4,
+          "effective_weight": 0.38,
+          "reasoning": "Checked 1 claims: 0 supported, 1 contradicted, 0 mixed. 1/1 claims had usable evidence."
+        },
+        {
+          "agent": "source_credibility",
+          "label": "uncertain",
+          "confidence": 0.0,
+          "weight": 0.15,
+          "effective_weight": 0.0,
+          "reasoning": "Source credibility score: 0.50 for . 3 checks performed."
+        },
+        {
+          "agent": "media_forensics",
+          "label": "uncertain",
+          "confidence": 0.1,
+          "weight": 0.1,
+          "effective_weight": 0.01,
+          "reasoning": "No images found in article \u2014 media forensics not applicable"
+        },
+        {
+          "agent": "bias_sentiment",
+          "label": "real",
+          "confidence": 0.4,
+          "weight": 0.05,
+          "effective_weight": 0.02,
+          "reasoning": "Bias score: 0.000"
+        },
+        {
+          "agent": "orchestrator",
+          "label": "override",
+          "reasoning": "Fact-check agent (conf=0.950) overrides ML classifier (conf=0.912) because external verification takes precedence over style analysis"
+        }
+      ],
+      "raw_output": {
+        "weighted_fake": 0.38,
+        "weighted_real": 0.1567,
+        "total_weight": 0.5467,
+        "override": true,
+        "override_reason": "Fact-check agent (conf=0.950) overrides ML classifier (conf=0.912) because external verification takes precedence over style analysis",
+        "needs_human_review": true,
+        "review_reason": "Agent conflict requiring override: Fact-check agent (conf=0.950) overrides ML classifier (conf=0.912) because external verification takes precedence over style analysis"
+      },
+      "elapsed_ms": 0.0
+    },
+    "review_reason": "Agent conflict requiring override: Fact-check agent (conf=0.950) overrides ML classifier (conf=0.912) because external verification takes precedence over style analysis",
+    "status": "pending",
+    "human_verdict": null,
+    "human_notes": "",
+    "added_at": 1787159494.348931,
+    "reviewed_at": null
+  },
+  {
+    "id": 14,
+    "article": {
+      "title": "",
+      "url": "",
+      "source_domain": ""
+    },
+    "verdict": {
+      "agent": "orchestrator",
+      "label": "uncertain",
+      "confidence": 0.72,
+      "reasoning": "Orchestrated verdict: uncertain (confidence=0.720). Agent signals: [ml_classifier=real(0.82), fact_check=uncertain(0.72), source_credibility=uncertain(0.00), media_forensics=uncertain(0.10), bias_sentiment=real(0.40)]. Override applied: True. Human review needed: True",
+      "evidence": [
+        {
+          "agent": "ml_classifier",
+          "label": "real",
+          "confidence": 0.8194956434829974,
+          "weight": 0.15,
+          "effective_weight": 0.1229,
+          "reasoning": "TF-IDF + Linear SVM: P(fake)=0.181, P(real)=0.819. Classifies based on writing style and vocabulary patterns."
+        },
+        {
+          "agent": "fact_check",
+          "label": "uncertain",
+          "confidence": 0.72,
+          "weight": 0.4,
+          "effective_weight": 0.288,
+          "reasoning": "Checked 1 claims: 0 supported, 0 contradicted, 0 mixed. 0/1 claims had usable evidence."
+        },
+        {
+          "agent": "source_credibility",
+          "label": "uncertain",
+          "confidence": 0.0,
+          "weight": 0.15,
+          "effective_weight": 0.0,
+          "reasoning": "Source credibility score: 0.50 for . 3 checks performed."
+        },
+        {
+          "agent": "media_forensics",
+          "label": "uncertain",
+          "confidence": 0.1,
+          "weight": 0.1,
+          "effective_weight": 0.01,
+          "reasoning": "No images found in article \u2014 media forensics not applicable"
+        },
+        {
+          "agent": "bias_sentiment",
+          "label": "real",
+          "confidence": 0.4,
+          "weight": 0.05,
+          "effective_weight": 0.02,
+          "reasoning": "Bias score: 0.000"
+        },
+        {
+          "agent": "orchestrator",
+          "label": "override",
+          "reasoning": "Fact-check agent (conf=0.720) overrides ML classifier (conf=0.819) because external verification takes precedence over style analysis"
+        }
+      ],
+      "raw_output": {
+        "weighted_fake": 0.0,
+        "weighted_real": 0.1429,
+        "total_weight": 0.4409,
+        "override": true,
+        "override_reason": "Fact-check agent (conf=0.720) overrides ML classifier (conf=0.819) because external verification takes precedence over style analysis",
+        "needs_human_review": true,
+        "review_reason": "Agent conflict requiring override: Fact-check agent (conf=0.720) overrides ML classifier (conf=0.819) because external verification takes precedence over style analysis"
+      },
+      "elapsed_ms": 0.0
+    },
+    "review_reason": "Agent conflict requiring override: Fact-check agent (conf=0.720) overrides ML classifier (conf=0.819) because external verification takes precedence over style analysis",
+    "status": "pending",
+    "human_verdict": null,
+    "human_notes": "",
+    "added_at": 1787160968.3756797,
+    "reviewed_at": null
+  },
+  {
+    "id": 15,
+    "article": {
+      "title": "Delhi court sends Satyendar Jain, 4 others to judicial custody in corruption case - The Hindu",
+      "url": "https://www.thehindu.com/news/cities/Delhi/delhi-court-sends-satyendar-jain-4-others-to-judicial-custody-in-corruption-case/article71364149.ece",
+      "source_domain": "www.thehindu.com"
+    },
+    "verdict": {
+      "agent": "orchestrator",
+      "label": "real",
+      "confidence": 0.4858,
+      "reasoning": "Orchestrated verdict: real (confidence=0.486). Agent signals: [ml_classifier=real(0.88), fact_check=uncertain(0.48), source_credibility=uncertain(0.00), media_forensics=real(0.30), bias_sentiment=real(0.40)]. Override applied: False. Human review needed: True",
+      "evidence": [
+        {
+          "agent": "ml_classifier",
+          "label": "real",
+          "confidence": 0.8757369212128404,
+          "weight": 0.15,
+          "effective_weight": 0.1314,
+          "reasoning": "TF-IDF + Linear SVM: P(fake)=0.124, P(real)=0.876. Classifies based on writing style and vocabulary patterns."
+        },
+        {
+          "agent": "fact_check",
+          "label": "uncertain",
+          "confidence": 0.48,
+          "weight": 0.4,
+          "effective_weight": 0.192,
+          "reasoning": "Checked 2 claims: 0 supported, 0 contradicted, 0 mixed. 0/2 claims had usable evidence."
+        },
+        {
+          "agent": "source_credibility",
+          "label": "uncertain",
+          "confidence": 0.0,
+          "weight": 0.15,
+          "effective_weight": 0.0,
+          "reasoning": "Source credibility score: 0.50 for www.thehindu.com. 3 checks performed."
+        },
+        {
+          "agent": "media_forensics",
+          "label": "real",
+          "confidence": 0.3,
+          "weight": 0.1,
+          "effective_weight": 0.03,
+          "reasoning": "Analyzed 10 images: 0 flagged as suspicious. EXIF available for 0 images."
+        },
+        {
+          "agent": "bias_sentiment",
+          "label": "real",
+          "confidence": 0.4,
+          "weight": 0.05,
+          "effective_weight": 0.02,
+          "reasoning": "Bias score: 0.000"
+        }
+      ],
+      "raw_output": {
+        "weighted_fake": 0.0,
+        "weighted_real": 0.1814,
+        "total_weight": 0.3734,
+        "override": false,
+        "override_reason": "",
+        "needs_human_review": true,
+        "review_reason": "Low confidence (0.486)"
+      },
+      "elapsed_ms": 0.0
+    },
+    "review_reason": "Low confidence (0.486)",
+    "status": "pending",
+    "human_verdict": null,
+    "human_notes": "",
+    "added_at": 1787161069.844327,
+    "reviewed_at": null
+  },
+  {
+    "id": 16,
+    "article": {
+      "title": "Delhi court sends Satyendar Jain, 4 others to judicial custody in corruption case - The Hindu",
+      "url": "https://www.thehindu.com/news/cities/Delhi/delhi-court-sends-satyendar-jain-4-others-to-judicial-custody-in-corruption-case/article71364149.ece",
+      "source_domain": "www.thehindu.com"
+    },
+    "verdict": {
+      "agent": "orchestrator",
+      "label": "fake",
+      "confidence": 0.3658,
+      "reasoning": "Orchestrated verdict: fake (confidence=0.366). Agent signals: [ml_classifier=fake(0.61), fact_check=uncertain(0.30), source_credibility=uncertain(0.00), media_forensics=real(0.30), bias_sentiment=uncertain(0.15)]. Override applied: False. Human review needed: True",
+      "evidence": [
+        {
+          "agent": "ml_classifier",
+          "label": "fake",
+          "confidence": 0.6056320161254882,
+          "weight": 0.15,
+          "effective_weight": 0.0908,
+          "reasoning": "TF-IDF + Linear SVM: P(fake)=0.606, P(real)=0.394. Classifies based on writing style and vocabulary patterns."
+        },
+        {
+          "agent": "fact_check",
+          "label": "uncertain",
+          "confidence": 0.3,
+          "weight": 0.4,
+          "effective_weight": 0.12,
+          "reasoning": "Checked 3 claims: 0 supported, 0 contradicted, 0 mixed. 0/3 claims had usable evidence."
+        },
+        {
+          "agent": "source_credibility",
+          "label": "uncertain",
+          "confidence": 0.0,
+          "weight": 0.15,
+          "effective_weight": 0.0,
+          "reasoning": "Source credibility score: 0.50 for www.thehindu.com. 3 checks performed."
+        },
+        {
+          "agent": "media_forensics",
+          "label": "real",
+          "confidence": 0.3,
+          "weight": 0.1,
+          "effective_weight": 0.03,
+          "reasoning": "Analyzed 10 images: 0 flagged as suspicious. EXIF available for 0 images."
+        },
+        {
+          "agent": "bias_sentiment",
+          "label": "uncertain",
+          "confidence": 0.15,
+          "weight": 0.05,
+          "effective_weight": 0.0075,
+          "reasoning": "Bias score: 0.153. Strong bias words: secret"
+        }
+      ],
+      "raw_output": {
+        "weighted_fake": 0.0908,
+        "weighted_real": 0.03,
+        "total_weight": 0.2483,
+        "override": false,
+        "override_reason": "",
+        "needs_human_review": true,
+        "review_reason": "Low confidence (0.366)"
+      },
+      "elapsed_ms": 0.0
+    },
+    "review_reason": "Low confidence (0.366)",
+    "status": "pending",
+    "human_verdict": null,
+    "human_notes": "",
+    "added_at": 1787161505.1085677,
+    "reviewed_at": null
   }
 ]

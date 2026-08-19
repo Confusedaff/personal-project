@@ -531,5 +531,196 @@
     "article_text": "Narendra Modi is the prime minister of India.",
     "metadata": {},
     "added_at": 1787159176.7068517
+  },
+  {
+    "id": 39,
+    "claim": "Narendra Modi is the prime minister of India.",
+    "verdict": "real",
+    "sources": [
+      "https://en.wikipedia.org/wiki/Narendra_Modi",
+      "https://www.pmindia.gov.in/en/",
+      "https://www.pmindia.gov.in/en/pms-profile/",
+      "https://www.narendramodi.in",
+      "https://www.britannica.com/biography/Narendra-Modi"
+    ],
+    "article_text": "Narendra Modi is the prime minister of India.",
+    "metadata": {},
+    "added_at": 1787159463.9046693
+  },
+  {
+    "id": 40,
+    "claim": "Narendra Modi is the prime minister of India.",
+    "verdict": "real",
+    "sources": [
+      "https://en.wikipedia.org/wiki/Narendra_Modi",
+      "https://www.pmindia.gov.in/en/",
+      "https://www.pmindia.gov.in/en/pms-profile/",
+      "https://www.britannica.com/biography/Narendra-Modi",
+      "https://vajiramandravi.com/current-affairs/prime-ministers-of-india/"
+    ],
+    "article_text": "Narendra Modi is the prime minister of India.",
+    "metadata": {},
+    "added_at": 1787159466.013491
+  },
+  {
+    "id": 41,
+    "claim": "Donal Trump is the prime minister of India.",
+    "verdict": "fake",
+    "sources": [
+      "https://www.pmindia.gov.in/en/",
+      "https://en.wikipedia.org/wiki/List_of_prime_ministers_of_India",
+      "https://en.wikipedia.org/wiki/Political_career_of_Donald_Trump",
+      "https://www.whitehouse.gov/administration/donald-j-trump/"
+    ],
+    "article_text": "Donal Trump is the prime minister of India.",
+    "metadata": {},
+    "added_at": 1787159494.3526068
+  },
+  {
+    "id": 42,
+    "claim": "Scientists at the university published a peer-reviewed study on regional climate patterns in the journal Nature this week, based on two decades of satellite data.",
+    "verdict": "uncertain",
+    "sources": [],
+    "article_text": "Scientists at the university published a peer-reviewed study on regional climate patterns in the journal Nature this week, based on two decades of satellite data.",
+    "metadata": {},
+    "added_at": 1787160968.3823347
+  },
+  {
+    "id": 43,
+    "claim": "Delhi court sends Satyendar Jain, 4 others to judicial custody in corruption case - The Hindu",
+    "verdict": "real",
+    "sources": [],
+    "article_text": "Delhi court sends Satyendar Jain, 4 others to judicial custody in corruption case - The Hindu",
+    "metadata": {},
+    "added_at": 1787161009.7032647
+  },
+  {
+    "id": 44,
+    "claim": "Delhi court sends Satyendar Jain, 4 others to judicial custody in corruption case - The Hindu.",
+    "verdict": "real",
+    "sources": [],
+    "article_text": "Delhi court sends Satyendar Jain, 4 others to judicial custody in corruption case - The Hindu. Scientists at the university published a peer-reviewed study on regional climate patterns in the journal Nature this week, based on two decades of satellite data.",
+    "metadata": {},
+    "added_at": 1787161069.847843
+  },
+  {
+    "id": 45,
+    "claim": "Scientists at the university published a peer-reviewed study on regional climate patterns in the journal Nature this week, based on two decades of satellite data.",
+    "verdict": "real",
+    "sources": [],
+    "article_text": "Delhi court sends Satyendar Jain, 4 others to judicial custody in corruption case - The Hindu. Scientists at the university published a peer-reviewed study on regional climate patterns in the journal Nature this week, based on two decades of satellite data.",
+    "metadata": {},
+    "added_at": 1787161070.0043063
+  },
+  {
+    "id": 46,
+    "claim": "Title:\n\"Apple Announces Transition from Intel Chips to Its Own Custom Silicon for Macs\"\n\nBody:\nOn June 22, 2020, Apple Inc.",
+    "verdict": "real",
+    "sources": [],
+    "article_text": "Delhi court sends Satyendar Jain, 4 others to judicial custody in corruption case - The Hindu. Title:\n\"Apple Announces Transition from Intel Chips to Its Own Custom Silicon for Macs\"\n\nBody:\nOn June 22, 2020, Apple Inc. announced that it would transition its Mac computers from Intel processors to its own custom-designed ARM-based chips, called Apple Silicon. The move was unveiled at Apple's annual Worldwide Developers Conference (WWDC). Apple said the transition would allow for better performance",
+    "metadata": {},
+    "added_at": 1787161462.356818
+  },
+  {
+    "id": 47,
+    "claim": "announced that it would transition its Mac computers from Intel processors to its own custom-designed ARM-based chips, called Apple Silicon.",
+    "verdict": "real",
+    "sources": [],
+    "article_text": "Delhi court sends Satyendar Jain, 4 others to judicial custody in corruption case - The Hindu. Title:\n\"Apple Announces Transition from Intel Chips to Its Own Custom Silicon for Macs\"\n\nBody:\nOn June 22, 2020, Apple Inc. announced that it would transition its Mac computers from Intel processors to its own custom-designed ARM-based chips, called Apple Silicon. The move was unveiled at Apple's annual Worldwide Developers Conference (WWDC). Apple said the transition would allow for better performance",
+    "metadata": {},
+    "added_at": 1787161462.5806766
+  },
+  {
+    "id": 48,
+    "claim": "Apple said the transition would allow for better performance, improved power efficiency, and tighter integration between hardware and software.",
+    "verdict": "real",
+    "sources": [],
+    "article_text": "Delhi court sends Satyendar Jain, 4 others to judicial custody in corruption case - The Hindu. Title:\n\"Apple Announces Transition from Intel Chips to Its Own Custom Silicon for Macs\"\n\nBody:\nOn June 22, 2020, Apple Inc. announced that it would transition its Mac computers from Intel processors to its own custom-designed ARM-based chips, called Apple Silicon. The move was unveiled at Apple's annual Worldwide Developers Conference (WWDC). Apple said the transition would allow for better performance",
+    "metadata": {},
+    "added_at": 1787161462.7838852
+  },
+  {
+    "id": 49,
+    "claim": "Apple stated the full transition would take about two years, and the company would continue to support Intel-based Macs for years to come.",
+    "verdict": "real",
+    "sources": [],
+    "article_text": "Delhi court sends Satyendar Jain, 4 others to judicial custody in corruption case - The Hindu. Title:\n\"Apple Announces Transition from Intel Chips to Its Own Custom Silicon for Macs\"\n\nBody:\nOn June 22, 2020, Apple Inc. announced that it would transition its Mac computers from Intel processors to its own custom-designed ARM-based chips, called Apple Silicon. The move was unveiled at Apple's annual Worldwide Developers Conference (WWDC). Apple said the transition would allow for better performance",
+    "metadata": {},
+    "added_at": 1787161462.9892528
+  },
+  {
+    "id": 50,
+    "claim": "Example 1 \u2013 Science / Space\n\nTitle:\n\"NASA's Perseverance Rover Successfully Lands on Mars to Search for Ancient Life\"\n\nBody:\nNASA's Perseverance rover touched down on the surface of Mars on February 18, 2021, after a seven-month journey from Earth.",
+    "verdict": "real",
+    "sources": [
+      "https://science.nasa.gov/mission/mars-2020-perseverance/",
+      "https://science.nasa.gov/resource/nasas-perseverance-rover-lands-successfully-on-mars/",
+      "https://www.jpl.nasa.gov/news/touchdown-nasas-mars-perseverance-rover-safely-lands-on-red-planet/",
+      "https://www.nasa.gov/news-release/touchdown-nasas-mars-perseverance-rover-safely-lands-on-red-planet/",
+      "https://en.wikipedia.org/wiki/Perseverance_(rover)"
+    ],
+    "article_text": "Delhi court sends Satyendar Jain, 4 others to judicial custody in corruption case - The Hindu. Example 1 \u2013 Science / Space\n\nTitle:\n\"NASA's Perseverance Rover Successfully Lands on Mars to Search for Ancient Life\"\n\nBody:\nNASA's Perseverance rover touched down on the surface of Mars on February 18, 2021, after a seven-month journey from Earth. The rover landed in Jezero Crater, a site scientists believe was once a lake and river delta. Perseverance is equipped with instruments designed to search f",
+    "metadata": {},
+    "added_at": 1787161485.2666929
+  },
+  {
+    "id": 51,
+    "claim": "The landing was confirmed by mission control at NASA's Jet Propulsion Laboratory in Pasadena, California, and was celebrated worldwide as a major achievement in space exploration.",
+    "verdict": "real",
+    "sources": [
+      "https://science.nasa.gov/mission/mars-2020-perseverance/",
+      "https://science.nasa.gov/resource/nasas-perseverance-rover-lands-successfully-on-mars/",
+      "https://www.jpl.nasa.gov/news/touchdown-nasas-mars-perseverance-rover-safely-lands-on-red-planet/",
+      "https://www.nasa.gov/news-release/touchdown-nasas-mars-perseverance-rover-safely-lands-on-red-planet/",
+      "https://en.wikipedia.org/wiki/Perseverance_(rover)"
+    ],
+    "article_text": "Delhi court sends Satyendar Jain, 4 others to judicial custody in corruption case - The Hindu. Example 1 \u2013 Science / Space\n\nTitle:\n\"NASA's Perseverance Rover Successfully Lands on Mars to Search for Ancient Life\"\n\nBody:\nNASA's Perseverance rover touched down on the surface of Mars on February 18, 2021, after a seven-month journey from Earth. The rover landed in Jezero Crater, a site scientists believe was once a lake and river delta. Perseverance is equipped with instruments designed to search f",
+    "metadata": {},
+    "added_at": 1787161485.4934957
+  },
+  {
+    "id": 52,
+    "claim": "Title:\n\"Local Man Turns $50 into $10 Million Using a Secret Algorithm He Found on the Dark Web\"\n\nBody:\nA man from a small town claims he discovered a hidden algorithm on the dark web that predicts stock market movements with 100% accuracy.",
+    "verdict": "fake",
+    "sources": [
+      "www.bullseyefx.com/2025/03/dark-web-alerts-using-stolen-data-to.html",
+      "github.com/topics/stock-price-prediction",
+      "aistockview.com",
+      "arxiv.org/html/2504.02872v1",
+      "www.researchgate.net/publication/397563566_AI-Powered_Framework_for_Proactive_Monitoring_of_Dark_Web_Marketplaces_and_Prediction_of_Emergent_Cybercrime_Trends"
+    ],
+    "article_text": "Delhi court sends Satyendar Jain, 4 others to judicial custody in corruption case - The Hindu. Title:\n\"Local Man Turns $50 into $10 Million Using a Secret Algorithm He Found on the Dark Web\"\n\nBody:\nA man from a small town claims he discovered a hidden algorithm on the dark web that predicts stock market movements with 100% accuracy. Using only a $50 initial investment, he says he turned it into $10 million in just three days. The man, who wishes to remain anonymous, is now selling the algorithm ",
+    "metadata": {},
+    "added_at": 1787161505.1106102
+  },
+  {
+    "id": 53,
+    "claim": "Using only a $50 initial investment, he says he turned it into $10 million in just three days.",
+    "verdict": "fake",
+    "sources": [
+      "www.bullseyefx.com/2025/03/dark-web-alerts-using-stolen-data-to.html",
+      "github.com/topics/stock-price-prediction",
+      "aistockview.com",
+      "arxiv.org/html/2504.02872v1",
+      "www.researchgate.net/publication/397563566_AI-Powered_Framework_for_Proactive_Monitoring_of_Dark_Web_Marketplaces_and_Prediction_of_Emergent_Cybercrime_Trends"
+    ],
+    "article_text": "Delhi court sends Satyendar Jain, 4 others to judicial custody in corruption case - The Hindu. Title:\n\"Local Man Turns $50 into $10 Million Using a Secret Algorithm He Found on the Dark Web\"\n\nBody:\nA man from a small town claims he discovered a hidden algorithm on the dark web that predicts stock market movements with 100% accuracy. Using only a $50 initial investment, he says he turned it into $10 million in just three days. The man, who wishes to remain anonymous, is now selling the algorithm ",
+    "metadata": {},
+    "added_at": 1787161505.3105397
+  },
+  {
+    "id": 54,
+    "claim": "\u201cThe banks don\u2019t want you to know this,\u201d he said in an exclusive interview.",
+    "verdict": "fake",
+    "sources": [
+      "www.bullseyefx.com/2025/03/dark-web-alerts-using-stolen-data-to.html",
+      "github.com/topics/stock-price-prediction",
+      "aistockview.com",
+      "arxiv.org/html/2504.02872v1",
+      "www.researchgate.net/publication/397563566_AI-Powered_Framework_for_Proactive_Monitoring_of_Dark_Web_Marketplaces_and_Prediction_of_Emergent_Cybercrime_Trends"
+    ],
+    "article_text": "Delhi court sends Satyendar Jain, 4 others to judicial custody in corruption case - The Hindu. Title:\n\"Local Man Turns $50 into $10 Million Using a Secret Algorithm He Found on the Dark Web\"\n\nBody:\nA man from a small town claims he discovered a hidden algorithm on the dark web that predicts stock market movements with 100% accuracy. Using only a $50 initial investment, he says he turned it into $10 million in just three days. The man, who wishes to remain anonymous, is now selling the algorithm ",
+    "metadata": {},
+    "added_at": 1787161505.6115324
   }
 ]

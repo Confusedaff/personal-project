@@ -4,7 +4,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,400;0,500;0,600;1,500&family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.0/chart.umd.min.js"></script>
 
 <style>
 #fnd-root {
@@ -70,6 +70,19 @@
   font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
   color: var(--text-muted); margin-bottom: 10px;
 }
+#fnd-root .input-tabs { display: flex; gap: 0; margin-bottom: 14px; }
+#fnd-root .input-tab {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 10px 0; border: 1px solid var(--border-strong); background: transparent;
+  color: var(--text-muted); font-family: 'IBM Plex Mono', monospace; font-size: 11.5px;
+  letter-spacing: 0.05em; cursor: pointer; transition: all 0.15s;
+}
+#fnd-root .input-tab:first-child { border-radius: 8px 0 0 8px; border-right: none; }
+#fnd-root .input-tab:last-child { border-radius: 0 8px 8px 0; }
+#fnd-root .input-tab.active { background: var(--real); color: #0d1a17; border-color: var(--real); }
+#fnd-root .input-tab svg { width: 13px; height: 13px; flex-shrink: 0; }
+#fnd-root .input-panel { display: none; }
+#fnd-root .input-panel.active { display: block; }
 #fnd-root textarea#fnd-input, #fnd-root input#fnd-url {
   width: 100%; background: var(--bg); color: var(--text-primary);
   border: 1px solid var(--border-strong); border-radius: 8px; padding: 14px; font-size: 14px;
@@ -77,7 +90,7 @@
 }
 #fnd-root textarea#fnd-input { min-height: 96px; resize: vertical; }
 #fnd-root textarea#fnd-input:focus, #fnd-root input#fnd-url:focus { border-color: var(--real); }
-#fnd-root input#fnd-url { height: 42px; margin-bottom: 10px; font-size: 13px; }
+#fnd-root input#fnd-url { height: 42px; font-size: 13px; }
 #fnd-root input#fnd-url::placeholder { color: var(--text-muted); }
 #fnd-root .desk-row { display: flex; align-items: center; gap: 14px; margin-top: 14px; flex-wrap: wrap; }
 #fnd-root button#fnd-run {
@@ -162,7 +175,7 @@
 #fnd-root .review-badge .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--amber); }
 
 /* Model bench */
-#fnd-root .bench-chart-wrap { height: 260px; margin-bottom: 18px; }
+#fnd-root .bench-chart-wrap { height: 260px; margin-bottom: 18px; position: relative; }
 #fnd-root .bench-chips { display: flex; flex-wrap: wrap; gap: 10px; }
 #fnd-root .chip {
   font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; color: var(--text-secondary);
@@ -191,19 +204,8 @@
 #fnd-root .cat-pct { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--text-secondary); text-align: right; }
 
 /* Trend chart */
-#fnd-root .trend-chart-wrap { height: 240px; }
+#fnd-root .trend-chart-wrap { height: 240px; position: relative; }
 
-/* Editor's note */
-#fnd-root .note { border: 1px solid var(--amber); border-left: 3px solid var(--amber); border-radius: 8px; padding: 22px 24px; background: rgba(232,168,61,0.06); }
-#fnd-root .note-title { font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--amber); margin-bottom: 10px; }
-#fnd-root .note p { font-size: 13.5px; color: var(--text-secondary); line-height: 1.65; margin: 0 0 12px; }
-#fnd-root .note p:last-child { margin-bottom: 0; }
-#fnd-root .note .fig { color: var(--text-primary); font-family: 'IBM Plex Mono', monospace; }
-#fnd-root .ablation-table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 12.5px; }
-#fnd-root .ablation-table th { text-align: left; font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); padding: 6px 10px; border-bottom: 1px solid var(--border); }
-#fnd-root .ablation-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text-secondary); }
-#fnd-root .ablation-table td:first-child { color: var(--text-primary); }
-#fnd-root .ablation-table td.mono { font-family: 'IBM Plex Mono', monospace; }
 
 #fnd-root footer { border-top: 1px solid var(--border); padding-top: 20px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--text-muted); line-height: 1.8; }
 #fnd-root footer b { color: var(--text-secondary); font-weight: 500; }
@@ -220,18 +222,30 @@
 <div id="fnd-root">
 <div class="wrap">
 
-  <p class="eyebrow">Use case #15 &middot; GenAI &amp; security</p>
   <h1>Fake news detection<br><em>analyst desk</em></h1>
-  <p class="sub">Multi-agent misinformation detection: claim extraction, fact-checking, source credibility, media forensics, and bias analysis — all orchestrated into one verdict with a transparent evidence trail.</p>
   <div class="ticker" id="fnd-ticker"></div>
 
   <!-- ── LIVE DESK ── -->
   <section aria-labelledby="fnd-live-h">
     <h2 id="fnd-live-h" class="sr-only">Live prediction demo</h2>
     <div class="desk">
-      <div class="desk-label">Wire intake — paste a URL or article text</div>
-      <input type="url" id="fnd-url" placeholder="https://example.com/article (optional — the backend will scrape it)">
-      <textarea id="fnd-input" placeholder="Or paste article text directly here...">Scientists at the university published a peer-reviewed study on regional climate patterns in the journal Nature this week, based on two decades of satellite data.</textarea>
+      <div class="desk-label">Wire intake — analyze an article</div>
+      <div class="input-tabs">
+        <button class="input-tab active" data-tab="url" id="fnd-tab-url">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+          URL
+        </button>
+        <button class="input-tab" data-tab="text" id="fnd-tab-text">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+          Text
+        </button>
+      </div>
+      <div class="input-panel active" id="fnd-panel-url">
+        <input type="url" id="fnd-url" placeholder="https://example.com/article">
+      </div>
+      <div class="input-panel" id="fnd-panel-text">
+        <textarea id="fnd-input" placeholder="Paste article text here...">Scientists at the university published a peer-reviewed study on regional climate patterns in the journal Nature this week, based on two decades of satellite data.</textarea>
+      </div>
       <div class="desk-row">
         <button id="fnd-run">Run analysis</button>
         <span class="desk-hint" id="fnd-source-hint">Checking backend...</span>
@@ -315,17 +329,6 @@
       <p class="sec-desc">Monthly fake vs. real article counts across the full training corpus (2015&ndash;2018) — a historical view of the training data, not live traffic.</p>
     </div>
     <div class="panel"><div class="trend-chart-wrap"><canvas id="fnd-trend-chart"></canvas></div></div>
-  </section>
-
-  <!-- ── EDITOR'S NOTE ── -->
-  <section aria-labelledby="fnd-note-h">
-    <h2 id="fnd-note-h" class="sr-only">Editor's note on limitations</h2>
-    <div class="note">
-      <div class="note-title">Editor's note — read before deploying</div>
-      <p>The multi-agent system adds factual verification on top of the original style-based classifier. However, limitations remain: the ML classifier agent still carries source-style bias (weight: 15%), the fact-check agent requires API keys and internet access, and the media forensics agent's reverse image search is a stub. The credibility list reflects editorial judgment. See <span class="fig">docs/limitations.md</span> for the full list.</p>
-      <table class="ablation-table" id="fnd-ablation-table"></table>
-      <p>Treat predictions as a <span class="fig">triage signal for human fact-checkers</span>, not an automated takedown mechanism. The orchestrator routes low-confidence or conflicting cases to a human review queue.</p>
-    </div>
   </section>
 
   <footer>
@@ -435,6 +438,20 @@
   const reviewSection = document.getElementById('fnd-review-section');
   const reviewText = document.getElementById('fnd-review-text');
   const urlInput = document.getElementById('fnd-url');
+
+  // ── Input tab switching ──
+  const tabUrl = document.getElementById('fnd-tab-url');
+  const tabText = document.getElementById('fnd-tab-text');
+  const panelUrl = document.getElementById('fnd-panel-url');
+  const panelText = document.getElementById('fnd-panel-text');
+  function switchTab(tab) {
+    tabUrl.classList.toggle('active', tab === 'url');
+    tabText.classList.toggle('active', tab === 'text');
+    panelUrl.classList.toggle('active', tab === 'url');
+    panelText.classList.toggle('active', tab === 'text');
+  }
+  tabUrl.addEventListener('click', () => switchTab('url'));
+  tabText.addEventListener('click', () => switchTab('text'));
 
   // ── Backend: /analyze (multi-agent) ──
   async function analyzeViaBackend(text, url) {
@@ -563,8 +580,9 @@
 
   // ── Main analysis function ──
   async function runAnalysis() {
-    const raw = input.value;
+    const isUrlTab = tabUrl.classList.contains('active');
     const url = urlInput.value.trim();
+    const raw = isUrlTab ? '' : input.value;
     if ((!raw || !raw.trim()) && !url) {
       errorMsg.style.display = 'block';
       verdictBlock.style.display = 'none';
@@ -753,13 +771,5 @@
       plugins: { legend: { labels: { color: '#a6a395', font: { family: 'Space Grotesk', size: 12 } } } }
     }
   });
-
-  // Ablation table
-  const ab = DATA.ablation;
-  document.getElementById('fnd-ablation-table').innerHTML = `
-    <tr><th>Setting</th><th>Accuracy</th><th>F1</th><th>Top terms favoring "real"</th></tr>
-    <tr><td>Dateline left in</td><td class="mono">${ab.with_dateline_leakage.accuracy}</td><td class="mono">${ab.with_dateline_leakage.f1_weighted}</td><td>${ab.with_dateline_leakage.top_terms_favoring_real.slice(0,4).join(', ')}</td></tr>
-    <tr><td>Dateline stripped (production)</td><td class="mono">${ab.without_dateline_leakage_production.accuracy}</td><td class="mono">${ab.without_dateline_leakage_production.f1_weighted}</td><td>${ab.without_dateline_leakage_production.top_terms_favoring_real.slice(0,4).join(', ')}</td></tr>
-  `;
 })();
 </script>
