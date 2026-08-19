@@ -275,9 +275,14 @@ def analyze(req: AnalyzeRequest, user: dict = Depends(get_current_user)):
         agent_results.append(ml_classifier_agent(enriched))
     if run_all or "fact_check" in requested_agents:
         agent_results.append(fact_check_agent(enriched))
-    if run_all or "source_credibility" in requested_agents:
+    # Only run source credibility if a URL or domain is available
+    has_source = bool(enriched.get("url") or enriched.get("source_domain")
+                      or enriched.get("metadata", {}).get("domain"))
+    if (run_all or "source_credibility" in requested_agents) and has_source:
         agent_results.append(source_credibility_agent(enriched))
-    if run_all or "media_forensics" in requested_agents:
+    # Skip media forensics for text-only input (no images to analyze)
+    has_images = bool(enriched.get("images"))
+    if (run_all or "media_forensics" in requested_agents) and has_images:
         agent_results.append(media_forensics_agent(enriched))
     if run_all or "bias_sentiment" in requested_agents:
         agent_results.append(bias_sentiment_agent(enriched))

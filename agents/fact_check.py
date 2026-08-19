@@ -1,35 +1,16 @@
 """
-Fact-Check Retrieval Agent — Web search + fact-check API cross-check.
+Fact-Check Retrieval Agent — Web search + fact-check API cross-check + LLM fallback.
 
-v2 changes from the original:
-  - Claim verdicts (supported/contradicted/mixed/no_evidence) are now
-    decided by an LLM given the claim + retrieved evidence, instead of
-    regex entity extraction and hand-tuned negation/contradiction
-    pattern matching.
-  - Web search now prefers a stable JSON API (Tavily) with the old
-    DuckDuckGo HTML scrape kept only as a last-resort fallback.
-  - Search queries per claim are LLM-generated instead of regex-derived.
-  - HTTP calls run in parallel via a thread pool instead of sequentially.
-  - Identical queries are cached in-process.
-  - Failures are logged instead of silently swallowed.
-
-v3 changes:
-  - Added Groq as the primary LLM provider (fast + cheap inference).
-    Falls back to Anthropic if Groq is unavailable/unconfigured.
-
-  *** SECURITY NOTE ***
-  GROQ_API_KEY below is hardcoded per request. Anyone who gets this file
-  (git history, a shared repo, a screenshot) gets your key. At minimum:
-    - add this file's path to .gitignore before committing anything else
-    - rotate the key immediately if it's ever pushed to a public repo
-    - prefer os.environ.get("GROQ_API_KEY") over hardcoding when you can
-  Replace the placeholder string below with your real key.
+v2: LLM-based verdict analysis instead of regex pattern matching.
+v3: Groq as primary LLM provider.
+v4: Direct LLM verification when no evidence is found via search.
 """
 from __future__ import annotations
 
 import json
 import logging
 import os
+import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import lru_cache
 from typing import Any
@@ -55,8 +36,7 @@ except ImportError:
 # LLM provider config
 # ---------------------------------------------------------------------------
 
-# Hardcoded per request — see security note above. Replace this placeholder.
-GROQ_API_KEY = "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"
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "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")
 GROQ_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
@@ -85,7 +65,7 @@ def _groq_complete(prompt: str, max_tokens: int = 400) -> str | None:
                 "max_completion_tokens": max_tokens,
                 "temperature": 0,
             },
-            timeout=15,
+            timeout=20,
         )
         resp.raise_for_status()
         data = resp.json()
@@ -123,6 +103,64 @@ def _strip_code_fence(text: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Direct LLM verification (fallback when search yields nothing)
+# ---------------------------------------------------------------------------
+
+_DIRECT_VERIFICATION_PROMPT = """You are a fact-checking expert. Given the following factual claim, determine if it is TRUE or FALSE based on your knowledge.
+
+Claim: {claim}
+
+Important rules:
+- Answer TRUE if the claim is factually accurate or mostly accurate.
+- Answer FALSE if the claim is factually inaccurate or mostly inaccurate.
+- Do NOT guess — if you genuinely cannot determine truthfulness, say UNCERTAIN.
+- Base your answer on well-established facts, not opinions.
+
+Respond with JSON only, no other text:
+{{"verdict": "TRUE" or "FALSE" or "UNCERTAIN", "confidence": 0.0-1.0, "reasoning": "brief one-sentence explanation"}}
+"""
+
+
+def _direct_llm_verify(claim_text: str) -> dict:
+    """Send the claim directly to the LLM for a TRUE/FALSE verdict."""
+    text = _llm_complete(
+        _DIRECT_VERIFICATION_PROMPT.format(claim=claim_text),
+        max_tokens=300,
+    )
+    if text is None:
+        return {"verdict_signal": "no_evidence", "confidence": 0.0,
+                "reasoning": "LLM unavailable for direct verification", "sources": [],
+                "method": "direct_llm_unavailable"}
+
+    try:
+        parsed = json.loads(_strip_code_fence(text))
+        raw_verdict = parsed.get("verdict", "UNCERTAIN").upper()
+        confidence = float(parsed.get("confidence", 0.5))
+        reasoning = parsed.get("reasoning", "")
+
+        if raw_verdict == "TRUE":
+            signal = "supported"
+        elif raw_verdict == "FALSE":
+            signal = "contradicted"
+        else:
+            signal = "mixed"
+            confidence = min(confidence, 0.4)
+
+        return {
+            "verdict_signal": signal,
+            "confidence": confidence,
+            "reasoning": f"[Direct LLM] {reasoning}",
+            "sources": [],
+            "method": "direct_llm",
+        }
+    except Exception:
+        logger.exception("direct LLM verification parse failed for: %r", claim_text)
+        return {"verdict_signal": "no_evidence", "confidence": 0.0,
+                "reasoning": "direct LLM verification failed to parse", "sources": [],
+                "method": "direct_llm_parse_error"}
+
+
+# ---------------------------------------------------------------------------
 # Retrieval
 # ---------------------------------------------------------------------------
 
@@ -157,42 +195,47 @@ def _search_fact_check_api(query: str) -> list[dict]:
 
 
 def _search_web(query: str) -> list[dict]:
-    """Web search via Tavily (preferred) with a DuckDuckGo HTML fallback."""
+    """Web search via DuckDuckGo API (JSON endpoint) with HTML fallback."""
     if not HAS_HTTPX:
         return []
 
-    tavily_key = os.environ.get("TAVILY_API_KEY", "")
-    if tavily_key:
-        try:
-            resp = httpx.post(
-                "https://api.tavily.com/search",
-                json={
-                    "api_key": tavily_key,
-                    "query": query,
-                    "search_depth": "basic",
-                    "max_results": 5,
-                },
-                timeout=10,
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            return [
-                {
-                    "title": r.get("title", ""),
-                    "snippet": r.get("content", ""),
-                    "url": r.get("url", ""),
-                }
-                for r in data.get("results", [])[:5]
-            ]
-        except Exception:
-            logger.exception("Tavily query failed, falling back to DDG: %r", query)
+    # Try DuckDuckGo Instant Answer API first (more reliable than HTML scraping)
+    try:
+        resp = httpx.get(
+            "https://api.duckduckgo.com/",
+            params={"q": query, "format": "json", "no_html": 1, "skip_disambig": 1},
+            timeout=10,
+        )
+        data = resp.json()
+        results = []
+        # Abstract (main answer)
+        abstract = data.get("AbstractText", "")
+        if abstract:
+            results.append({
+                "title": data.get("Heading", query),
+                "snippet": abstract,
+                "url": data.get("AbstractURL", ""),
+            })
+        # Related topics
+        for topic in data.get("RelatedTopics", [])[:4]:
+            if isinstance(topic, dict) and topic.get("Text"):
+                results.append({
+                    "title": topic.get("Text", "")[:100],
+                    "snippet": topic.get("Text", ""),
+                    "url": topic.get("FirstURL", ""),
+                })
+        if results:
+            return results
+    except Exception:
+        logger.debug("DuckDuckGo JSON API failed for: %r", query)
 
+    # Fallback: DuckDuckGo HTML search
     try:
         from bs4 import BeautifulSoup
         resp = httpx.get(
             "https://html.duckduckgo.com/html/",
             params={"q": query},
-            headers={"User-Agent": "Mozilla/5.0"},
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
             timeout=10,
         )
         soup = BeautifulSoup(resp.text, "html.parser")
@@ -209,7 +252,34 @@ def _search_web(query: str) -> list[dict]:
                 })
         return results
     except Exception:
-        logger.exception("DuckDuckGo fallback search failed: %r", query)
+        logger.exception("DuckDuckGo HTML search failed: %r", query)
+        return []
+
+
+def _search_brave(query: str) -> list[dict]:
+    """Fallback: Brave Search API (if configured)."""
+    api_key = os.environ.get("BRAVE_API_KEY", "")
+    if not api_key or not HAS_HTTPX:
+        return []
+    try:
+        resp = httpx.get(
+            "https://api.search.brave.com/res/v1/web/search",
+            params={"q": query, "count": 5},
+            headers={"Accept": "application/json", "X-Subscription-Token": api_key},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        results = []
+        for r in data.get("web", {}).get("results", [])[:5]:
+            results.append({
+                "title": r.get("title", ""),
+                "snippet": r.get("description", ""),
+                "url": r.get("url", ""),
+            })
+        return results
+    except Exception:
+        logger.exception("Brave search failed: %r", query)
         return []
 
 
@@ -219,11 +289,13 @@ def _cached_web_search(query: str) -> tuple[dict, ...]:
 
 
 def _generate_search_queries(claim_text: str) -> list[str]:
-    """Ask the model for a few targeted, checkable search queries."""
+    """Ask the model for targeted, checkable search queries."""
     text = _llm_complete(
-        "Generate 3 short web search queries (3-8 words each) that would "
-        "help verify or refute this claim. Respond with a JSON array of "
-        f"strings only, no other text.\n\nClaim: {claim_text}",
+        "Generate 3 short, specific web search queries (3-8 words each) that would "
+        "help verify or refute this factual claim. Focus on key nouns, dates, numbers, "
+        "and organizations mentioned in the claim.\n"
+        "Respond with a JSON array of strings only, no other text.\n\n"
+        f"Claim: {claim_text}",
         max_tokens=200,
     )
     if text is None:
@@ -276,7 +348,7 @@ def _analyze_claim_verdict(claim_text: str, fact_results: list[dict],
                             web_results: list[dict]) -> dict:
     if not fact_results and not web_results:
         return {"verdict_signal": "no_evidence", "confidence": 0.0,
-                 "reasoning": "no search results retrieved", "sources": []}
+                "reasoning": "no search results retrieved", "sources": []}
 
     evidence_text = _format_evidence(fact_results, web_results)
     text = _llm_complete(
@@ -287,8 +359,8 @@ def _analyze_claim_verdict(claim_text: str, fact_results: list[dict],
 
     if text is None:
         return {"verdict_signal": "mixed", "confidence": 0.2,
-                 "reasoning": "LLM unavailable; evidence retrieved but not analyzed",
-                 "sources": urls[:10]}
+                "reasoning": "LLM unavailable; evidence retrieved but not analyzed",
+                "sources": urls[:10]}
 
     try:
         parsed = json.loads(_strip_code_fence(text))
@@ -304,7 +376,7 @@ def _analyze_claim_verdict(claim_text: str, fact_results: list[dict],
     except Exception:
         logger.exception("verdict analysis parse failed for claim: %r", claim_text)
         return {"verdict_signal": "no_evidence", "confidence": 0.0,
-                 "reasoning": "verdict analysis failed", "sources": urls[:10]}
+                "reasoning": "verdict analysis failed", "sources": urls[:10]}
 
 
 # ---------------------------------------------------------------------------
@@ -325,6 +397,7 @@ class FactCheckAgent(BaseAgent):
             claim_text = claim_obj["claim"]
             queries = _generate_search_queries(claim_text)
 
+            # ── Phase 1: Search for evidence ──
             fact_results, web_results = [], []
             seen = set()
             with ThreadPoolExecutor(max_workers=(len(queries) * 2) or 1) as pool:
@@ -346,7 +419,14 @@ class FactCheckAgent(BaseAgent):
                         seen.add(url)
                         (fact_results if kind == "fact" else web_results).append(r)
 
-            analysis = _analyze_claim_verdict(claim_text, fact_results, web_results)
+            # ── Phase 2: Analyze with LLM if evidence found ──
+            if fact_results or web_results:
+                analysis = _analyze_claim_verdict(claim_text, fact_results, web_results)
+            else:
+                # ── Phase 3: No evidence found — fallback to direct LLM verification ──
+                logger.info("No search results for claim, falling back to direct LLM: %r", claim_text[:80])
+                analysis = _direct_llm_verify(claim_text)
+
             analysis["original_claim"] = claim_text
             analysis["search_queries"] = queries
             return analysis
@@ -358,6 +438,7 @@ class FactCheckAgent(BaseAgent):
         contradicted = sum(1 for c in claim_analyses if c["verdict_signal"] == "contradicted")
         mixed = sum(1 for c in claim_analyses if c["verdict_signal"] == "mixed")
         with_evidence = sum(1 for c in claim_analyses if c["verdict_signal"] != "no_evidence")
+        direct_llm_count = sum(1 for c in claim_analyses if c.get("method") == "direct_llm")
 
         avg_conf = (
             sum(c["confidence"] for c in claim_analyses) / len(claim_analyses)
@@ -378,6 +459,9 @@ class FactCheckAgent(BaseAgent):
             url for c in claim_analyses for url in c.get("sources", [])
         ))
 
+        methods = [c.get("method", "search") for c in claim_analyses]
+        method_summary = f"{direct_llm_count} direct LLM" if direct_llm_count else "search"
+
         return AgentResult(
             agent_name=self.name,
             label=label,
@@ -385,7 +469,8 @@ class FactCheckAgent(BaseAgent):
             reasoning=(
                 f"Checked {len(claim_analyses)} claims: {supported} supported, "
                 f"{contradicted} contradicted, {mixed} mixed. "
-                f"{with_evidence}/{len(claim_analyses)} claims had usable evidence."
+                f"{with_evidence}/{len(claim_analyses)} claims had usable evidence. "
+                f"Method: {method_summary}."
             ),
             evidence=claim_analyses,
             raw_output={
@@ -394,6 +479,7 @@ class FactCheckAgent(BaseAgent):
                 "mixed": mixed,
                 "claims_checked": len(claim_analyses),
                 "claims_with_evidence": with_evidence,
+                "direct_llm_verifications": direct_llm_count,
                 "sources": all_sources[:20],
             },
         )

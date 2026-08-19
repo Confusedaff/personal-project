@@ -92,7 +92,7 @@
   border: 1px solid var(--border-strong); border-radius: 8px; padding: 14px; font-size: 14px;
   font-family: 'Space Grotesk', sans-serif; line-height: 1.55; outline: none;
 }
-#fnd-root textarea#fnd-input { min-height: 96px; resize: vertical; }
+#fnd-root textarea#fnd-input { min-height: 96px; max-height: 50vh; overflow-y: auto; }
 #fnd-root textarea#fnd-input:focus, #fnd-root input#fnd-url:focus { border-color: var(--real); }
 #fnd-root input#fnd-url { height: 42px; font-size: 13px; }
 #fnd-root input#fnd-url::placeholder { color: var(--text-muted); }
@@ -483,6 +483,14 @@
   // ── DOM refs ──
   const runBtn = document.getElementById('fnd-run');
   const input = document.getElementById('fnd-input');
+
+  // ── Auto-resize textarea ──
+  function autoResize(el) {
+    el.style.height = 'auto';
+    el.style.height = el.scrollHeight + 'px';
+  }
+  input.addEventListener('input', function() { autoResize(this); });
+  if (input.value.trim()) autoResize(input);
   const errorMsg = document.getElementById('fnd-error');
   const verdictBlock = document.getElementById('fnd-verdict-block');
   const verdictLine = document.getElementById('fnd-verdict-line');
