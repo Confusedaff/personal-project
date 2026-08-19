@@ -6,6 +6,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,400;0,500;0,600;1,500&family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.0/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.js"></script>
 
 <style>
 #fnd-root {
@@ -66,21 +67,23 @@
 }
 
 /* Live desk */
-#fnd-root .desk { background: var(--panel-2); border: 1px solid var(--border-strong); border-radius: 12px; padding: 26px; }
+#fnd-root .desk { background: var(--panel-2); border: 1px solid var(--border-strong); border-radius: 12px; padding: 26px; position: relative; z-index: 3; }
 #fnd-root .desk-label {
   font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
   color: var(--text-muted); margin-bottom: 10px;
 }
-#fnd-root .input-tabs { display: flex; gap: 0; margin-bottom: 14px; }
+#fnd-root .input-tabs { display: flex; gap: 1px; margin: 0 0 -6px 18px; position: relative; z-index: 1; }
 #fnd-root .input-tab {
-  flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
-  padding: 10px 0; border: 1px solid var(--border-strong); background: transparent;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 9px 16px; border: 1px solid var(--border-strong); border-bottom: none; background: var(--panel);
   color: var(--text-muted); font-family: 'IBM Plex Mono', monospace; font-size: 11.5px;
-  letter-spacing: 0.05em; cursor: pointer; transition: all 0.15s;
+  letter-spacing: 0.05em; cursor: pointer; transition: all 0.15s; border-radius: 9px 9px 0 0;
+  box-shadow: 0 -3px 10px rgba(0,0,0,0.2);
 }
-#fnd-root .input-tab:first-child { border-radius: 8px 0 0 8px; border-right: none; }
-#fnd-root .input-tab:last-child { border-radius: 0 8px 8px 0; }
-#fnd-root .input-tab.active { background: var(--real); color: #0d1a17; border-color: var(--real); }
+#fnd-root .input-tab:hover { color: var(--text-secondary); border-color: var(--text-muted); }
+#fnd-root .input-tab.active {
+  background: var(--panel-2); color: var(--real); border-color: var(--border-strong);
+}
 #fnd-root .input-tab svg { width: 13px; height: 13px; flex-shrink: 0; }
 #fnd-root .input-panel { display: none; }
 #fnd-root .input-panel.active { display: block; }
@@ -93,6 +96,22 @@
 #fnd-root textarea#fnd-input:focus, #fnd-root input#fnd-url:focus { border-color: var(--real); }
 #fnd-root input#fnd-url { height: 42px; font-size: 13px; }
 #fnd-root input#fnd-url::placeholder { color: var(--text-muted); }
+#fnd-root .pdf-drop {
+  width: 100%; background: var(--bg); border: 1px dashed var(--border-strong); border-radius: 8px;
+  padding: 22px 14px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 8px; cursor: pointer; transition: border-color 0.15s, background 0.15s; text-align: center;
+}
+#fnd-root .pdf-drop:hover, #fnd-root .pdf-drop.dragover { border-color: var(--real); background: var(--real-dim); }
+#fnd-root .pdf-drop svg { width: 22px; height: 22px; color: var(--text-muted); flex-shrink: 0; }
+#fnd-root .pdf-drop-label { font-size: 13px; color: var(--text-secondary); }
+#fnd-root .pdf-drop-hint { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--text-muted); }
+#fnd-root .pdf-filename {
+  margin-top: 10px; display: none; align-items: center; justify-content: space-between; gap: 10px;
+  background: var(--bg); border: 1px solid var(--border-strong); border-radius: 6px; padding: 8px 12px;
+  font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--text-secondary);
+}
+#fnd-root .pdf-filename .pdf-remove { cursor: pointer; color: var(--fake); background: none; border: none; font-family: inherit; font-size: 12px; }
+#fnd-root .pdf-status { margin-top: 8px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--text-muted); display: none; }
 #fnd-root .desk-row { display: flex; align-items: center; gap: 14px; margin-top: 14px; flex-wrap: wrap; }
 #fnd-root button#fnd-run {
   font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; letter-spacing: 0.06em; text-transform: uppercase;
@@ -236,23 +255,40 @@
   <!-- ── LIVE DESK ── -->
   <section aria-labelledby="fnd-live-h">
     <h2 id="fnd-live-h" class="sr-only">Live prediction demo</h2>
+    <div class="input-tabs">
+      <button class="input-tab active" data-tab="url" id="fnd-tab-url">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+        URL
+      </button>
+      <button class="input-tab" data-tab="text" id="fnd-tab-text">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        Text
+      </button>
+      <button class="input-tab" data-tab="pdf" id="fnd-tab-pdf">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9.5 17h1a1.5 1.5 0 0 0 0-3h-1v4"/><path d="M9.5 14v0"/><path d="M13 17v-3h1.2a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1H13z"/></svg>
+        PDF
+      </button>
+    </div>
     <div class="desk">
       <div class="desk-label">Wire intake — analyze an article</div>
-      <div class="input-tabs">
-        <button class="input-tab active" data-tab="url" id="fnd-tab-url">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-          URL
-        </button>
-        <button class="input-tab" data-tab="text" id="fnd-tab-text">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-          Text
-        </button>
-      </div>
       <div class="input-panel active" id="fnd-panel-url">
         <input type="url" id="fnd-url" placeholder="https://example.com/article">
       </div>
       <div class="input-panel" id="fnd-panel-text">
         <textarea id="fnd-input" placeholder="Paste article text here...">Scientists at the university published a peer-reviewed study on regional climate patterns in the journal Nature this week, based on two decades of satellite data.</textarea>
+      </div>
+      <div class="input-panel" id="fnd-panel-pdf">
+        <div class="pdf-drop" id="fnd-pdf-drop">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <span class="pdf-drop-label">Drop a PDF here, or click to browse</span>
+          <span class="pdf-drop-hint">.pdf up to 20MB</span>
+        </div>
+        <input type="file" id="fnd-pdf-input" accept="application/pdf" style="display:none">
+        <div class="pdf-filename" id="fnd-pdf-filename">
+          <span id="fnd-pdf-filename-text"></span>
+          <button type="button" class="pdf-remove" id="fnd-pdf-remove">remove</button>
+        </div>
+        <div class="pdf-status" id="fnd-pdf-status"></div>
       </div>
       <div class="desk-row">
         <button id="fnd-run">Run analysis</button>
@@ -463,16 +499,93 @@
   // ── Input tab switching ──
   const tabUrl = document.getElementById('fnd-tab-url');
   const tabText = document.getElementById('fnd-tab-text');
+  const tabPdf = document.getElementById('fnd-tab-pdf');
   const panelUrl = document.getElementById('fnd-panel-url');
   const panelText = document.getElementById('fnd-panel-text');
+  const panelPdf = document.getElementById('fnd-panel-pdf');
+  let activeTab = 'url';
   function switchTab(tab) {
+    activeTab = tab;
     tabUrl.classList.toggle('active', tab === 'url');
     tabText.classList.toggle('active', tab === 'text');
+    tabPdf.classList.toggle('active', tab === 'pdf');
     panelUrl.classList.toggle('active', tab === 'url');
     panelText.classList.toggle('active', tab === 'text');
+    panelPdf.classList.toggle('active', tab === 'pdf');
+    errorMsg.style.display = 'none';
   }
   tabUrl.addEventListener('click', () => switchTab('url'));
   tabText.addEventListener('click', () => switchTab('text'));
+  tabPdf.addEventListener('click', () => switchTab('pdf'));
+
+  // ── PDF upload + text extraction ──
+  if (window['pdfjsLib']) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.js';
+  }
+  const pdfDrop = document.getElementById('fnd-pdf-drop');
+  const pdfFileInput = document.getElementById('fnd-pdf-input');
+  const pdfFilename = document.getElementById('fnd-pdf-filename');
+  const pdfFilenameText = document.getElementById('fnd-pdf-filename-text');
+  const pdfRemove = document.getElementById('fnd-pdf-remove');
+  const pdfStatus = document.getElementById('fnd-pdf-status');
+  let pdfExtractedText = '';
+
+  async function extractPdfText(file) {
+    pdfStatus.style.display = 'block';
+    pdfStatus.textContent = 'Extracting text\u2026';
+    pdfExtractedText = '';
+    try {
+      const buf = await file.arrayBuffer();
+      const doc = await pdfjsLib.getDocument({ data: buf }).promise;
+      let pages = [];
+      for (let i = 1; i <= doc.numPages; i++) {
+        const page = await doc.getPage(i);
+        const content = await page.getTextContent();
+        pages.push(content.items.map(it => it.str).join(' '));
+      }
+      pdfExtractedText = pages.join('\n\n').replace(/\s+/g, ' ').trim();
+      const words = pdfExtractedText ? pdfExtractedText.split(/\s+/).length : 0;
+      pdfStatus.textContent = words > 0
+        ? `Extracted ${words.toLocaleString()} words from ${doc.numPages} page${doc.numPages === 1 ? '' : 's'}.`
+        : 'No selectable text found in this PDF (it may be scanned/image-only).';
+    } catch (err) {
+      console.warn('PDF extraction failed:', err);
+      pdfStatus.textContent = 'Could not read that PDF. Try another file.';
+      pdfExtractedText = '';
+    }
+  }
+
+  function setPdfFile(file) {
+    if (!file) return;
+    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+      pdfStatus.style.display = 'block';
+      pdfStatus.textContent = 'Please choose a .pdf file.';
+      return;
+    }
+    pdfFilenameText.textContent = `${file.name} \u00b7 ${(file.size / 1024).toFixed(0)} KB`;
+    pdfFilename.style.display = 'flex';
+    pdfDrop.style.display = 'none';
+    extractPdfText(file);
+  }
+
+  pdfDrop.addEventListener('click', () => pdfFileInput.click());
+  pdfDrop.addEventListener('dragover', (e) => { e.preventDefault(); pdfDrop.classList.add('dragover'); });
+  pdfDrop.addEventListener('dragleave', () => pdfDrop.classList.remove('dragover'));
+  pdfDrop.addEventListener('drop', (e) => {
+    e.preventDefault();
+    pdfDrop.classList.remove('dragover');
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) setPdfFile(e.dataTransfer.files[0]);
+  });
+  pdfFileInput.addEventListener('change', () => {
+    if (pdfFileInput.files && pdfFileInput.files[0]) setPdfFile(pdfFileInput.files[0]);
+  });
+  pdfRemove.addEventListener('click', () => {
+    pdfFileInput.value = '';
+    pdfExtractedText = '';
+    pdfFilename.style.display = 'none';
+    pdfDrop.style.display = 'flex';
+    pdfStatus.style.display = 'none';
+  });
 
   // ── Backend: /analyze (multi-agent) ──
   async function analyzeViaBackend(text, url) {
@@ -601,10 +714,14 @@
 
   // ── Main analysis function ──
   async function runAnalysis() {
-    const isUrlTab = tabUrl.classList.contains('active');
+    const isUrlTab = activeTab === 'url';
+    const isPdfTab = activeTab === 'pdf';
     const url = urlInput.value.trim();
-    const raw = isUrlTab ? '' : input.value;
+    const raw = isUrlTab ? '' : (isPdfTab ? pdfExtractedText : input.value);
     if ((!raw || !raw.trim()) && !url) {
+      errorMsg.textContent = isPdfTab
+        ? 'Upload a PDF with extractable text first.'
+        : 'Type or paste some article text first.';
       errorMsg.style.display = 'block';
       verdictBlock.style.display = 'none';
       return;
