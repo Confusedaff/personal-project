@@ -58,28 +58,32 @@ This system takes a different approach: it **extracts factual claims** from an a
 
 ### System Flow
 
+## System Flow
+
+The system processes user-provided URLs or text through ingestion, claim extraction, parallel analysis agents, orchestration, and final verdict generation.
+
 ```mermaid
 flowchart TD
     A[User Input: URL or Text] --> B[Ingestion Agent]
     B --> C[Claim Extraction Agent]
     C --> D[Multi-Agent Analysis Layer]
-    
+
     D --> E[ML Classifier]
     D --> F[Fact-Check Agent]
     D --> G[Source Credibility Agent]
     D --> H[Media Forensics Agent]
     D --> I[Bias/Sentiment Agent]
-    
+
     E --> J[Orchestrator]
     F --> J
     G --> J
     H --> J
     I --> J
-    
+
     J --> K{Verdict}
     K -->|Confident| L[Final Verdict + Evidence Trail]
     K -->|Uncertain / Conflicting| M[Human Review Queue]
-    
+
     L --> N[Knowledge Base Logging]
     M --> O[Feedback / Retraining Loop]
 ```
