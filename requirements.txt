@@ -28,10 +28,6 @@ python-whois>=0.9
 Pillow>=10.0
 ImageHash>=4.3
 
-# Knowledge base / RAG (optional)
-sentence-transformers>=2.2
-faiss-cpu>=1.7
-
 # Authentication
 python-jose[cryptography]>=3.3
 bcrypt>=4.0
