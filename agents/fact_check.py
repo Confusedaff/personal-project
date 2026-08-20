@@ -36,7 +36,7 @@ except ImportError:
 # LLM provider config
 # ---------------------------------------------------------------------------
 
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "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")
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 GROQ_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
@@ -50,7 +50,7 @@ _anthropic_client = (
 
 def _groq_complete(prompt: str, max_tokens: int = 400) -> str | None:
     """Call Groq's OpenAI-compatible chat completions endpoint."""
-    if not HAS_HTTPX or not GROQ_API_KEY or GROQ_API_KEY.startswith("gsk_YOUR_"):
+    if not HAS_HTTPX or not GROQ_API_KEY:
         return None
     try:
         resp = httpx.post(

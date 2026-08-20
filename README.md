@@ -1266,6 +1266,63 @@ uvicorn api.main:app --reload --port 8000
 
 ---
 
+## Deployment on Render
+
+### Quick Start
+
+1. **Fork or clone** this repository to your GitHub account.
+2. Go to [Render](https://render.com) and create a new **Web Service**.
+3. Connect your GitHub repository and select the `fact-check-llm` branch.
+4. Configure the service:
+   - **Build Command:**
+     ```
+     pip install -r requirements.txt
+     ```
+   - **Start Command:**
+     ```
+     uvicorn api.main:app --host 0.0.0.0 --port $PORT
+     ```
+5. Add the following **environment variables** in Render dashboard:
+
+   | Variable | Required | Description |
+   |----------|----------|-------------|
+   | `SECRET_KEY` | Yes | A strong random string (Render can auto-generate) |
+   | `GROQ_API_KEY` | Optional | Groq LLM API key for fact-checking |
+   | `ANTHROPIC_API_KEY` | Optional | Anthropic LLM fallback |
+   | `BRAVE_API_KEY` | Optional | Brave Search for web retrieval |
+   | `FACTCHECK_API_KEY` | Optional | Google Fact Check Tools API |
+   | `CORS_ORIGINS` | Optional | Comma-separated allowed origins |
+
+6. Click **Create Web Service** and wait for deployment.
+7. Test the health endpoint: `GET /health` — should return `{"status": "ok"}`.
+8. Open the dashboard at your Render URL.
+
+### Local Development
+
+```bash
+# Clone and install
+git clone <repo-url>
+cd fact-check-llm
+pip install -r requirements.txt
+
+# Copy and configure environment
+cp .env.example .env
+# Edit .env with your API keys (optional for local dev)
+
+# Run the server
+uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+The dashboard will be available at `http://localhost:8000/`.
+
+### Important Notes
+
+- **SQLite is ephemeral on Render.** User accounts and analysis data will be lost on redeployment. For persistent storage, migrate to PostgreSQL or Supabase.
+- **ML models are loaded at startup.** The first request may be slower as models warm up.
+- **LLM API keys are optional.** The system degrades gracefully with rule-based fallbacks, but fact-checking quality improves with API keys configured.
+
+---
+
 ## License & Credits
 
 ### License

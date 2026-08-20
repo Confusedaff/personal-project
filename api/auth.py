@@ -28,6 +28,14 @@ SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-change-in-production-pleas
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.environ.get("TOKEN_EXPIRE_MINUTES", "1440"))  # 24h
 
+# Warn if using the default secret key in production
+if SECRET_KEY == "dev-secret-change-in-production-please":
+    import logging as _logging
+    _logging.getLogger("fakenews.auth").warning(
+        "SECRET_KEY is using the default development value. "
+        "Set a strong SECRET_KEY environment variable for production!"
+    )
+
 # ── OAuth2 scheme ─────────────────────────────────────────────────────
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
@@ -82,6 +90,25 @@ async def get_current_user(token: Optional[str] = Depends(oauth2_scheme)) -> dic
         raise HTTPException(status_code=401, detail="User not found")
     if not user.get("is_active", True):
         raise HTTPException(status_code=403, detail="Account disabled")
+    return user
+
+
+async def get_current_user_optional(token: Optional[str] = Depends(oauth2_scheme)) -> Optional[dict]:
+    """Optional dependency: returns user dict if token is valid, None otherwise.
+    Used for endpoints that work both authenticated and unauthenticated (e.g. /health)."""
+    if token is None:
+        return None
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("sub")
+        if user_id is None:
+            return None
+    except JWTError:
+        return None
+
+    user = get_user_by_id(int(user_id))
+    if user is None or not user.get("is_active", True):
+        return None
     return user
 
 

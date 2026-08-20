@@ -413,7 +413,7 @@
 
   // ── Config ──
   const urlApiParam = new URLSearchParams(window.location.search).get('api');
-  const API_BASE = (urlApiParam || window.FND_API_BASE || 'http://127.0.0.1:8000').replace(/\/$/, '');
+  const API_BASE = (urlApiParam || window.FND_API_BASE || '').replace(/\/$/, '');
   const ANALYZE_TIMEOUT_MS = 30000;
   document.getElementById('fnd-footnote').textContent =
     `Multi-agent analysis via ${API_BASE}/analyze — runs claim extraction, fact-checking, source credibility, media forensics, and bias analysis, then orchestrates a single verdict.`;

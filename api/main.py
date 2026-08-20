@@ -4,11 +4,12 @@ Serving API for the Fake News Detection Multi-Agent System.
 Now supports both the original single-model /predict endpoint and the new
 multi-agent /analyze endpoint with full evidence trails.
 
-Run with:  uvicorn api.main:app --reload --port 8000   (from the project root)
+Run locally:   uvicorn api.main:app --reload --port 8000
+Run on Render: uvicorn api.main:app --host 0.0.0.0 --port $PORT
 
 Endpoints
 ---------
-GET  /health                      liveness check + agent status
+GET  /health                      liveness check (no auth required)
 POST /predict                     legacy: {title?, text} -> label, confidence
 POST /analyze                     NEW: multi-agent analysis with evidence trail
 GET  /stats/model-comparison       accuracy/F1 per benchmarked model
@@ -23,6 +24,7 @@ GET  /knowledge-base               knowledge base stats
 """
 import json
 import logging
+import os
 import sys
 import time
 from pathlib import Path
@@ -55,11 +57,16 @@ from agents.review_queue import get_review_queue
 from agents.feedback import get_feedback_loop
 
 # Import auth system
-from api.auth import get_current_user
+from api.auth import get_current_user, get_current_user_optional
 from api import user_db
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("fakenews.api")
+
+# Ensure data directories exist on startup
+DATA_DIR = ROOT / "data"
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+(DATA_DIR / "user_data").mkdir(parents=True, exist_ok=True)
 
 # Pre-warm knowledge base (lazy model loading happens in background)
 logger.info("Pre-loading knowledge base...")
@@ -77,8 +84,14 @@ app = FastAPI(
                 "bias analysis. Returns verdicts with transparent evidence trails.",
     version="2.0.0",
 )
+# ── CORS ──
+# In production, set CORS_ORIGINS to your frontend domain(s), comma-separated.
+# Default: allow all origins for local development.
+_cors_origins_raw = os.environ.get("CORS_ORIGINS", "")
+_cors_origins = [o.strip() for o in _cors_origins_raw.split(",") if o.strip()] if _cors_origins_raw else ["*"]
 app.add_middleware(
-    CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
+    CORSMiddleware, allow_origins=_cors_origins, allow_methods=["*"], allow_headers=["*"],
+    allow_credentials=True if _cors_origins != ["*"] else False,
 )
 
 # ── Auth router ──
@@ -203,22 +216,25 @@ def dashboard_alt():
 
 
 @app.get("/health")
-def health(user: dict = Depends(get_current_user)):
+def health(user: dict = Depends(get_current_user_optional)):
+    """Health check — works both unauthenticated (basic) and authenticated (detailed)."""
     kb = get_knowledge_base()
-    user_queue = user_db.get_review_queue_stats(user["id"])
-    return {
+    base = {
         "status": "ok",
         "model": best_model_name,
         "version": "2.0.0-multi-agent",
-        "user": user["username"],
         "agents": [
             "ingestion", "claim_extraction", "ml_classifier",
             "fact_check", "source_credibility", "media_forensics",
             "bias_sentiment", "orchestrator"
         ],
         "knowledge_base": kb.get_stats(),
-        "review_queue": user_queue,
     }
+    if user is not None:
+        user_queue = user_db.get_review_queue_stats(user["id"])
+        base["user"] = user["username"]
+        base["review_queue"] = user_queue
+    return base
 
 
 @app.post("/predict", response_model=PredictResponse)

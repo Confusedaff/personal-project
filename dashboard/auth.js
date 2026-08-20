@@ -15,7 +15,7 @@
 
   function getApiBase() {
     const params = new URLSearchParams(window.location.search);
-    return (params.get('api') || window.FND_API_BASE || 'http://127.0.0.1:8000').replace(/\/$/, '');
+    return (params.get('api') || window.FND_API_BASE || '').replace(/\/$/, '');
   }
 
   function getToken() {
