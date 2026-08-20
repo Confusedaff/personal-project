@@ -366,7 +366,8 @@ class Orchestrator(BaseAgent):
                 evidence_trail.append({
                     "agent": "fact_check",
                     "label": "sources",
-                    "sources": fc_sources[:10],
+                    "reasoning": f"Checked {fc_raw.get('claims_checked', 0)} claims, {fc_raw.get('claims_with_evidence', 0)} with evidence. {len(fc_sources)} sources found.",
+                    "sources": fc_sources,
                     "claims_checked": fc_raw.get("claims_checked", 0),
                     "claims_with_evidence": fc_raw.get("claims_with_evidence", 0),
                     "evidence_details": [

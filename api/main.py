@@ -215,6 +215,17 @@ def dashboard_alt():
     return HTMLResponse(content=DASHBOARD_PATH.read_text(encoding="utf-8"))
 
 
+ANALYTICS_PATH = ROOT / "dashboard" / "analytics.html"
+
+
+@app.get("/analytics", response_class=HTMLResponse)
+def analytics():
+    """Serve the analytics dashboard."""
+    if not ANALYTICS_PATH.exists():
+        raise HTTPException(status_code=503, detail="Analytics page not found.")
+    return HTMLResponse(content=ANALYTICS_PATH.read_text(encoding="utf-8"))
+
+
 @app.get("/health")
 def health(user: dict = Depends(get_current_user_optional)):
     """Health check — works both unauthenticated (basic) and authenticated (detailed)."""
