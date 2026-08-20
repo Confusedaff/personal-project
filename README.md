@@ -58,8 +58,6 @@ This system takes a different approach: it **extracts factual claims** from an a
 
 ### System Flow
 
-## System Flow
-
 The system processes user-provided URLs or text through ingestion, claim extraction, parallel analysis agents, orchestration, and final verdict generation.
 
 ```mermaid
