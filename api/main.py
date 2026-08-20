@@ -49,6 +49,7 @@ from agents.source_credibility import SourceCredibilityAgent
 from agents.media_forensics import MediaForensicsAgent
 from agents.bias_sentiment import BiasSentimentAgent
 from agents.orchestrator import Orchestrator
+from agents.input_profile import analyze_input
 from agents.knowledge_base import get_knowledge_base
 from agents.review_queue import get_review_queue
 from agents.feedback import get_feedback_loop
@@ -154,6 +155,9 @@ class AnalyzeResponse(BaseModel):
     needs_human_review: bool
     review_reason: str
     elapsed_ms: float
+    input_profile: str = ""
+    agent_weights: dict = Field(default_factory=dict)
+    weighting_reason: str = ""
 
 
 class ReviewResolveRequest(BaseModel):
@@ -262,6 +266,13 @@ def analyze(req: AnalyzeRequest, user: dict = Depends(get_current_user)):
     claims = claim_result.evidence  # list of claim dicts
     enriched["claims"] = claims
 
+    # 2b. Input profiling for dynamic weighting
+    input_profile = analyze_input(
+        title=req.title,
+        text=req.text,
+        url=req.url,
+    )
+
     # 3. Run specialist agents
     requested_agents = req.agents
     run_all = "all" in requested_agents
@@ -291,6 +302,7 @@ def analyze(req: AnalyzeRequest, user: dict = Depends(get_current_user)):
     #    .label, .confidence, .reasoning, .evidence, .raw_output, .to_dict())
     orchestrator_input = enriched.copy()
     orchestrator_input["agent_results"] = agent_results
+    orchestrator_input["input_profile"] = input_profile
     verdict = orchestrator(orchestrator_input)
 
     # 5. Human review queue (per-user)
@@ -330,6 +342,9 @@ def analyze(req: AnalyzeRequest, user: dict = Depends(get_current_user)):
         needs_human_review=verdict.raw_output.get("needs_human_review", False),
         review_reason=verdict.raw_output.get("review_reason", ""),
         elapsed_ms=round(elapsed, 1),
+        input_profile=verdict.raw_output.get("input_profile", ""),
+        agent_weights=verdict.raw_output.get("agent_weights", {}),
+        weighting_reason=verdict.raw_output.get("weighting_reason", ""),
     )
 
 
