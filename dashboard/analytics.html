@@ -6,6 +6,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.0/chart.umd.min.js"></script>
 
 <style>
+html, body { margin: 0; padding: 0; background: #10161d; min-height: 100vh; }
 #fnd-root {
   --bg: #10161d;
   --panel: #1a2129;
@@ -180,12 +181,6 @@
     </div>
     <div class="panel"><div class="trend-chart-wrap"><canvas id="fnd-trend-chart"></canvas></div></div>
   </section>
-
-  <footer>
-    <div><b>Data</b> Kaggle Fake and Real News Dataset &middot; True.csv + Fake.csv &middot; 44,889 articles after cleaning</div>
-    <div><b>Pipeline</b> src/preprocessing.py &middot; src/train.py &middot; agents/*.py</div>
-    <div><b>Serving</b> api/main.py (FastAPI) &middot; /analyze (multi-agent) + /predict (legacy) &middot; this dashboard: dashboard/analytics.html</div>
-  </footer>
 
 </div>
 </div>

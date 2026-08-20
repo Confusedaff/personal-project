@@ -6,6 +6,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,400;0,500;0,600;1,500&family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 
 <style>
+html, body { margin: 0; padding: 0; background: #10161d; min-height: 100vh; }
 #fnd-root {
   --bg: #10161d;
   --panel: #1a2129;
@@ -168,9 +169,6 @@
 #fnd-root .ablation-table td:first-child { color: var(--text-primary); }
 #fnd-root .ablation-table td.mono { font-family: 'IBM Plex Mono', monospace; }
 
-#fnd-root footer { border-top: 1px solid var(--border); padding-top: 20px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--text-muted); line-height: 1.8; }
-#fnd-root footer b { color: var(--text-secondary); font-weight: 500; }
-
 /* Top menu */
 #fnd-root .top-menu { position: fixed; top: 16px; right: 20px; z-index: 100; }
 #fnd-root .menu-btn {
@@ -217,7 +215,7 @@
     <div class="desk">
       <div class="desk-label">Wire intake — paste a URL or article text</div>
       <input type="url" id="fnd-url" placeholder="https://example.com/article (optional — the backend will scrape it)">
-      <textarea id="fnd-input" placeholder="Or paste article text directly here...">Scientists at the university published a peer-reviewed study on regional climate patterns in the journal Nature this week, based on two decades of satellite data.</textarea>
+      <textarea id="fnd-input" placeholder="Or paste article text directly here..."></textarea>
       <div class="desk-row">
         <button id="fnd-run">Run analysis</button>
         <span class="desk-hint" id="fnd-source-hint">Checking backend...</span>
@@ -275,12 +273,6 @@
     </div>
   </section>
 
-  <footer>
-    <div><b>Data</b> Kaggle Fake and Real News Dataset &middot; True.csv + Fake.csv &middot; 44,889 articles after cleaning</div>
-    <div><b>Pipeline</b> src/preprocessing.py &middot; src/train.py &middot; agents/*.py</div>
-    <div><b>Serving</b> api/main.py (FastAPI) &middot; /analyze (multi-agent) + /predict (legacy) &middot; this dashboard: dashboard/index.html</div>
-  </footer>
-
 </div>
 </div>
 
@@ -295,8 +287,7 @@
   document.getElementById('fnd-ticker').innerHTML =
     `<span><b>${mc.n_train + mc.n_test}</b> articles indexed</span>` +
     `<span>production model <b>${best}</b></span>` +
-    `<span>test F1 <b>${bestStats.f1_weighted}</b></span>` +
-    `<span>agents <b>8</b></span>`;
+    `<span>test F1 <b>${bestStats.f1_weighted}</b></span>`;
 
   // ── Config ──
   const urlApiParam = new URLSearchParams(window.location.search).get('api');
