@@ -29,6 +29,7 @@ A **layered multi-agent system** that goes beyond style-based classification to 
 - [Troubleshooting](#troubleshooting)
 - [Limitations](#limitations)
 - [Contributing](#contributing)
+- [Deployment on Render](#deployment-on-render)
 - [License & Credits](#license--credits)
 
 ---
@@ -231,6 +232,7 @@ Fake-News-main/
 ├── agents/                         Multi-agent system (8 agents)
 │   ├── __init__.py                 Package exports
 │   ├── base.py                     BaseAgent, AgentResult, Label enum
+│   ├── input_profile.py            Input classification (InputType, InputProfile, analyze_input)
 │   ├── ingestion.py                URL scraping, metadata extraction, domain detection
 │   ├── claim_extraction.py         LLM-based claim extraction + rule-based fallback
 │   ├── ml_classifier.py            TF-IDF + Linear SVM wrapper
@@ -238,7 +240,7 @@ Fake-News-main/
 │   ├── source_credibility.py       Domain reputation, WHOIS, URLhaus
 │   ├── media_forensics.py          EXIF, perceptual hashing (images only)
 │   ├── bias_sentiment.py           Loaded language, emotional patterns
-│   ├── orchestrator.py             Weighted voting + override rules
+│   ├── orchestrator.py             Dynamic weighted voting + override rules
 │   ├── knowledge_base.py           Vector DB / RAG (FAISS + sentence-transformers)
 │   ├── review_queue.py             Human review routing
 │   └── feedback.py                 Retraining data feedback loop
@@ -284,12 +286,18 @@ Fake-News-main/
 │   ├── dateline_leakage_ablation.json  With/without dateline comparison
 │   └── js_model.json               Compact client-side model (3,500 terms)
 │
+├── tests/                          Test suite (79 tests)
+│   ├── test_input_profile.py       Input profiling unit tests (16)
+│   ├── test_orchestrator.py        Orchestrator + dynamic weighting tests (28)
+│   └── test_deployment.py          Integration / deployment tests (35)
+│
 ├── docs/
 │   └── limitations.md              Limitations & responsible-use note
 │
 ├── .env                            Environment config (git-ignored)
 ├── .env.example                    Environment template
 ├── .gitignore                      Git ignore rules
+├── render.yaml                     Render deployment config
 ├── requirements.txt                Python dependencies
 └── README.md                       This file
 ```
@@ -374,6 +382,7 @@ Create a `.env` file in the project root (copy from `.env.example`):
 | `GROQ_API_KEY` | No | `None` | Groq API key (fast/cheap LLM, primary for fact-check) |
 | `ANTHROPIC_API_KEY` | No | `None` | Anthropic API key (fallback LLM) |
 | `BRAVE_API_KEY` | No | `None` | Brave Search API key (alternative to DuckDuckGo) |
+| `CORS_ORIGINS` | No | `*` | Comma-separated allowed CORS origins |
 
 > **Without API keys**: The system still works. Claim extraction falls back to rule-based patterns. Fact-check falls back to direct LLM verification (if LLM keys available) or returns UNCERTAIN.
 
@@ -427,8 +436,8 @@ python src/train.py && python src/ablation_dateline.py && python src/export_js_m
 ### API Interaction
 
 ```bash
-# Health check (requires JWT token)
-curl http://127.0.0.1:8000/health -H "Authorization: Bearer YOUR_JWT_TOKEN"
+# Health check (no auth required)
+curl http://127.0.0.1:8000/health
 
 # Register a new user
 curl -X POST http://127.0.0.1:8000/auth/register \
@@ -536,7 +545,7 @@ username=analyst@example.com&password=securepass123
 | `GET` | `/` | Public | Serves dashboard (client-side auth check) |
 | `GET` | `/login` | Public | Serves login page |
 | `GET` | `/dashboard` | Public | Alias for `/` |
-| `GET` | `/health` | Required | Liveness check + agent status |
+| `GET` | `/health` | Public | Liveness check + agent status |
 | `POST` | `/analyze` | Required | **Multi-agent analysis with evidence trail** |
 | `POST` | `/predict` | Required | Legacy single-model prediction |
 
@@ -557,6 +566,19 @@ username=analyst@example.com&password=securepass123
   "label": "fake",
   "confidence": 0.87,
   "reasoning": "Fact-check found 3 claims contradicted by web sources...",
+  "input_profile": {
+    "type": "ARTICLE",
+    "word_count": 523,
+    "summary": "Full-length article (523 words)"
+  },
+  "agent_weights": {
+    "ml_classifier": 0.15,
+    "fact_check": 0.35,
+    "source_credibility": 0.15,
+    "media_forensics": 0.10,
+    "bias_sentiment": 0.05
+  },
+  "weighting_reason": "Dynamic weights for ARTICLE input. Evidence quality adjustment: fact_check ×1.3 (strong evidence).",
   "agent_results": [
     {"agent_name": "ml_classifier", "label": "real", "confidence": 0.72, "reasoning": "...", "evidence": [], "elapsed_ms": 45},
     {"agent_name": "fact_check", "label": "fake", "confidence": 0.91, "reasoning": "...", "evidence": [], "elapsed_ms": 3200},
@@ -755,6 +777,7 @@ BaseAgent (abstract)
 ├── SourceCredibilityAgent
 ├── MediaForensicsAgent
 ├── BiasSentimentAgent
+├── InputProfiler (input_profile.py)
 ├── OrchestratorAgent
 ├── KnowledgeBase
 ├── ReviewQueue
@@ -813,7 +836,7 @@ class AgentResult:
 - Lazy-loads `models/best_model.joblib` and `models/vectorizer.joblib` on first call
 - Uses `src/preprocessing.clean_text()` with `remove_dateline=True`
 - Returns probabilities via `predict_proba()` (Linear SVM wrapped with `CalibratedClassifierCV`)
-- **Weight in orchestrator**: 0.15
+- **Base weight in orchestrator**: 0.15 (varies by input type — see Dynamic Weighting)
 
 #### Fact-Check Agent (`agents/fact_check.py`) — Most Complex
 
@@ -839,7 +862,7 @@ class AgentResult:
 - Label: FAKE if contradicted > supported, REAL if supported > contradicted
 - Confidence: composite of average claim confidence + evidence coverage ratio
 
-**Weight in orchestrator**: 0.40 (highest — most reliable signal)
+**Base weight in orchestrator**: 0.35–0.50 (varies by input type — highest weight, most reliable signal)
 
 #### Source Credibility Agent (`agents/source_credibility.py`)
 
@@ -851,7 +874,7 @@ class AgentResult:
 - URLhaus API: checks if domain is flagged for malware hosting
 - TLD heuristics: suspicious TLDs (.xyz, .top, .club, .info, .buzz, .gq, .ml, .cf, .tk) get penalty
 - Score starts at 0.5, adjusted by each check
-- **Weight in orchestrator**: 0.15
+- **Base weight in orchestrator**: 0.15 (varies by input type — see Dynamic Weighting)
 
 #### Media Forensics Agent (`agents/media_forensics.py`)
 
@@ -863,7 +886,7 @@ class AgentResult:
 - Perceptual hashing: `imagehash.phash()` for duplicate detection
 - Reverse image search: **STUB** — `_reverse_image_search()` returns `[]`
 - Skipped entirely when no images present
-- **Weight in orchestrator**: 0.10
+- **Base weight in orchestrator**: 0.00–0.10 (varies by input type — see Dynamic Weighting)
 
 #### Bias/Sentiment Agent (`agents/bias_sentiment.py`)
 
@@ -874,45 +897,72 @@ class AgentResult:
 - `EMOTIONAL_PATTERNS` (6 regex): ALL CAPS, excessive exclamation, fear-mongering, etc.
 - `HEADCLINE_PATTERNS` (3 regex): death counts, all-caps action verbs, etc.
 - Composite score 0-1 based on weighted sum
-- **Weight in orchestrator**: 0.05 (supporting signal only)
+- **Base weight in orchestrator**: 0.05–0.15 (varies by input type — see Dynamic Weighting)
+
+#### Input Profiler (`agents/input_profile.py`)
+
+**Purpose**: Classify incoming text by input length/quality to drive dynamic agent weighting.
+
+**Input Types:**
+
+| Type | Word Count | Description |
+|---|---|---|
+| `MINIMAL` | 0–20 | Headlines, short claims, social media posts |
+| `SHORT` | 21–100 | Brief articles, summaries |
+| `MEDIUM` | 101–400 | Standard news articles |
+| `ARTICLE` | 400+ | Full-length articles, detailed reports |
+
+**Returns an `InputProfile`** with the classified type, word count, and a human-readable summary.
 
 #### Orchestrator (`agents/orchestrator.py`)
 
-**Purpose**: Combine all agent outputs into a single verdict.
+**Purpose**: Combine all agent outputs into a single verdict using **input-aware dynamic weighting**.
 
-**Agent Weights:**
+**Base Weights per Input Type:**
 
-| Agent | Weight | Rationale |
-|---|---|---|
-| `claim_extraction` | 0.0 | Extraction only, no classification |
-| `ml_classifier` | 0.15 | Style signal (useful but not ground truth) |
-| `fact_check` | 0.40 | **THE accuracy lever** — actual claim verification |
-| `source_credibility` | 0.15 | Domain reputation catches known bad actors |
-| `media_forensics` | 0.10 | Image manipulation detection |
-| `bias_sentiment` | 0.05 | Supporting signal only |
-| `ingestion` | 0.0 | No classification |
+Weights adapt to the input — a headline gets different treatment than a full article.
+
+| Agent | MINIMAL | SHORT | MEDIUM | ARTICLE |
+|---|---|---|---|---|
+| `ml_classifier` | 0.20 | 0.15 | 0.15 | 0.15 |
+| `fact_check` | 0.50 | 0.45 | 0.40 | 0.35 |
+| `source_credibility` | 0.15 | 0.15 | 0.15 | 0.15 |
+| `media_forensics` | 0.00 | 0.05 | 0.10 | 0.10 |
+| `bias_sentiment` | 0.15 | 0.15 | 0.10 | 0.05 |
+
+> MINIMAL inputs rely more on fact-check (50%) and bias (15%) since there's no article context for media forensics. ARTICLE inputs lean more on media forensics and bias signals.
+
+**Dynamic Weight Adjustment:**
+
+Before voting, base weights are multiplied by two factors:
+
+1. **Evidence quality factor** (0.7–1.3):
+   - If fact-check has **no sources** → 0.7 (down-weight)
+   - If fact-check has **strong evidence** (supported/contradicted > 0) → 1.2 (up-weight)
+   - If fact-check has **sources AND strong evidence** → 1.3 (up-weight more)
+
+2. **Fact-check evidence strength** (1.0 or 1.2):
+   - 1.2 if fact-check found web evidence AND has a definitive verdict (supported/contradicted > 0)
+   - 1.0 otherwise
+
+**Override Rules:**
+
+1. **Fact-check override**: If fact_check confidence > 0.7 and contradicts ML classifier → fact_check wins (unless input is MINIMAL, which downgrades the override to UNCERTAIN).
+2. **Source credibility override**: If source_credibility confidence > 0.6 and labels fake while ML labels real → source credibility wins.
+3. **MINIMAL input downgrade**: If override fires on MINIMAL input, label is downgraded to UNCERTAIN (short text = less reliable overrides).
 
 **Decision Logic:**
 
 ```
+weights = compute_dynamic_weights(input_type, agent_results)
 weighted_fake = sum(weight_i * confidence_i) for all agents labeling "fake"
 weighted_real = sum(weight_i * confidence_i) for all agents labeling "real"
 
-if fact_check.confidence > 0.7 and fact_check.label != ml_classifier.label:
-    → fact_check wins (override #1)
-elif source_credibility.confidence > 0.6 and source_credibility.label == "fake" and ml_classifier.label == "real":
-    → source_credibility wins (override #2)
-else:
-    → fake_ratio = weighted_fake / total_weight
-    → real_ratio = weighted_real / total_weight
-    → label = argmax(fake_ratio, real_ratio)
-    → confidence = max(fake_ratio, real_ratio)
+fake_ratio = weighted_fake / total_weight
+real_ratio = weighted_real / total_weight
+label = argmax(fake_ratio, real_ratio)
+confidence = max(fake_ratio, real_ratio)
 ```
-
-**Override Rules:**
-1. **Fact-check override**: If fact-check is highly confident (>0.7) and contradicts the ML classifier, fact-check wins. This prevents a style-based classifier from overriding actual factual evidence.
-2. **Source credibility override**: Known bad domains with low credibility scores override the ML classifier.
-3. **Human review routing**: Low-confidence or conflicting cases go to a review queue.
 
 **Human Review Triggers:**
 - Confidence < 0.5
@@ -1072,7 +1122,7 @@ python src/build_dashboard.py      # rebuilds dashboard with new numbers
 | Password hashing | bcrypt with salt (12 rounds) |
 | Per-user data isolation | Separate JSON files per user_id |
 | Parameterized SQL | SQLite with `?` placeholders (no SQL injection) |
-| CORS | Configured (currently `allow_origins=["*"]` for dev) |
+| CORS | Configurable via `CORS_ORIGINS` env var (defaults to `*` for dev) |
 | `.env` excluded from git | `.gitignore` covers `.env`, `data/users.db`, `data/user_data/` |
 | XSS protection | `escapeHtml()` function in dashboard JS |
 | Token-based auth | Bearer tokens in headers (not cookies, so no CSRF risk) |
@@ -1084,17 +1134,17 @@ python src/build_dashboard.py      # rebuilds dashboard with new numbers
 | **Rate limiting** | Not implemented | Login has no brute-force protection |
 | **HTTPS** | Not enforced | No TLS termination — use a reverse proxy in production |
 | **Token revocation** | Client-side only | Logout discards the token; no server-side blacklist |
-| **CORS `*`** | Open | Acceptable for dev, restrict in production |
+| **CORS `*`** | Default (configurable via `CORS_ORIGINS` env var) | Restrict in production |
 | **Default JWT secret** | Hardcoded fallback | Change `SECRET_KEY` env var before deploying |
 | **Sequential user IDs** | Predictable (1, 2, 3) | Not a vulnerability with JWT auth |
-| **API key in source** | Hardcoded fallback in `fact_check.py` | Use env vars; never commit real keys |
+| **API key in source** | ~~Hardcoded fallback in `fact_check.py`~~ Fixed | All API keys now read exclusively from env vars |
 | **DuckDuckGo scraping** | Fragile | Could be rate-limited or blocked |
 | **No input sanitization** | Not needed for SQL | XSS handled by frontend `escapeHtml()` |
 
 ### Production Recommendations
 
 1. Set `SECRET_KEY` to a cryptographically random string
-2. Replace `allow_origins=["*"]` with your frontend domain
+2. Set `CORS_ORIGINS` to your frontend domain (defaults to `*` for dev)
 3. Add rate limiting (e.g., `slowapi` or nginx rate limiting)
 4. Put behind a reverse proxy (nginx/Caddy) with TLS
 5. Add password complexity requirements (uppercase, numbers, special chars)
@@ -1261,7 +1311,7 @@ uvicorn api.main:app --reload --port 8000
 1. Create `agents/my_agent.py` inheriting from `BaseAgent`
 2. Implement `run(self, article_dict: dict) -> AgentResult`
 3. Register in `api/main.py` (import + instantiate + add to agent list)
-4. Add weight in `agents/orchestrator.py`
+4. Add per-InputType weights in `agents/orchestrator.py` (`BASE_WEIGHTS` dict)
 5. No changes needed to existing agents
 
 ---
