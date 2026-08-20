@@ -357,6 +357,30 @@ class Orchestrator(BaseAgent):
                         ),
                     })
 
+        # ── Add fact-check sources to evidence trail for visibility ──
+        if fact_check_result:
+            fc_raw = fact_check_result.raw_output or {}
+            fc_sources = fc_raw.get("sources", [])
+            fc_evidence = fact_check_result.evidence or []
+            if fc_sources or fc_evidence:
+                evidence_trail.append({
+                    "agent": "fact_check",
+                    "label": "sources",
+                    "sources": fc_sources[:10],
+                    "claims_checked": fc_raw.get("claims_checked", 0),
+                    "claims_with_evidence": fc_raw.get("claims_with_evidence", 0),
+                    "evidence_details": [
+                        {
+                            "claim": c.get("original_claim", c.get("claim", "")),
+                            "verdict_signal": c.get("verdict_signal", ""),
+                            "confidence": c.get("confidence", 0),
+                            "reasoning": c.get("reasoning", ""),
+                            "sources": c.get("sources", []),
+                        }
+                        for c in fc_evidence[:5]
+                    ],
+                })
+
         # === Human review decision ===
         needs_review = False
         review_reason = ""

@@ -206,26 +206,29 @@ def _search_web(query: str) -> list[dict]:
             params={"q": query, "format": "json", "no_html": 1, "skip_disambig": 1},
             timeout=10,
         )
-        data = resp.json()
-        results = []
-        # Abstract (main answer)
-        abstract = data.get("AbstractText", "")
-        if abstract:
-            results.append({
-                "title": data.get("Heading", query),
-                "snippet": abstract,
-                "url": data.get("AbstractURL", ""),
-            })
-        # Related topics
-        for topic in data.get("RelatedTopics", [])[:4]:
-            if isinstance(topic, dict) and topic.get("Text"):
+        if resp.status_code == 200:
+            data = resp.json()
+            results = []
+            # Abstract (main answer)
+            abstract = data.get("AbstractText", "")
+            if abstract:
                 results.append({
-                    "title": topic.get("Text", "")[:100],
-                    "snippet": topic.get("Text", ""),
-                    "url": topic.get("FirstURL", ""),
+                    "title": data.get("Heading", query),
+                    "snippet": abstract,
+                    "url": data.get("AbstractURL", ""),
                 })
-        if results:
-            return results
+            # Related topics
+            for topic in data.get("RelatedTopics", [])[:4]:
+                if isinstance(topic, dict) and topic.get("Text"):
+                    results.append({
+                        "title": topic.get("Text", "")[:100],
+                        "snippet": topic.get("Text", ""),
+                        "url": topic.get("FirstURL", ""),
+                    })
+            if results:
+                return results
+        else:
+            logger.debug("DuckDuckGo JSON API returned %d for: %r", resp.status_code, query)
     except Exception:
         logger.debug("DuckDuckGo JSON API failed for: %r", query)
 
@@ -235,10 +238,22 @@ def _search_web(query: str) -> list[dict]:
         resp = httpx.get(
             "https://html.duckduckgo.com/html/",
             params={"q": query},
-            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
             timeout=10,
+            follow_redirects=True,
         )
-        soup = BeautifulSoup(resp.text, "html.parser")
+        # DuckDuckGo returns 202 when rate-limiting or showing captcha
+        if resp.status_code not in (200, 202):
+            logger.debug("DuckDuckGo HTML returned %d for: %r", resp.status_code, query)
+            return []
+
+        text = resp.text
+        # Detect captcha or blocked pages
+        if "captcha" in text.lower() or "automated queries" in text.lower() or len(text) < 500:
+            logger.debug("DuckDuckGo returned captcha/block page for: %r", query)
+            return []
+
+        soup = BeautifulSoup(text, "html.parser")
         results = []
         for result in soup.find_all("div", class_="result")[:5]:
             title_el = result.find("a", class_="result__a")
@@ -250,10 +265,12 @@ def _search_web(query: str) -> list[dict]:
                     "snippet": snippet_el.get_text(strip=True) if snippet_el else "",
                     "url": url_el.get_text(strip=True) if url_el else "",
                 })
-        return results
+        if results:
+            return results
+        logger.debug("DuckDuckGo HTML parsed 0 results for: %r", query)
     except Exception:
         logger.exception("DuckDuckGo HTML search failed: %r", query)
-        return []
+    return []
 
 
 def _search_brave(query: str) -> list[dict]:
@@ -285,28 +302,70 @@ def _search_brave(query: str) -> list[dict]:
 
 @lru_cache(maxsize=2048)
 def _cached_web_search(query: str) -> tuple[dict, ...]:
-    return tuple(_search_web(query))
+    """Search web: DuckDuckGo first, fall back to Brave if no results."""
+    results = _search_web(query)
+    if not results:
+        # DuckDuckGo returned nothing (rate-limited/blocked) — try Brave
+        logger.debug("DuckDuckGo returned no results, trying Brave for: %r", query)
+        results = _search_brave(query)
+    return tuple(results)
 
 
 def _generate_search_queries(claim_text: str) -> list[str]:
     """Ask the model for targeted, checkable search queries."""
     text = _llm_complete(
-        "Generate 3 short, specific web search queries (3-8 words each) that would "
-        "help verify or refute this factual claim. Focus on key nouns, dates, numbers, "
-        "and organizations mentioned in the claim.\n"
-        "Respond with a JSON array of strings only, no other text.\n\n"
+        "Generate exactly 3 web search queries to verify or refute this claim.\n"
+        "Each query MUST be 3-8 words maximum. Use keywords only, no full sentences.\n"
+        "Focus on: key nouns, names, dates, numbers, organizations.\n\n"
+        "Example good queries:\n"
+        "Claim: 'Scientists at MIT published a study on climate change in Nature journal'\n"
+        "Queries: [\"MIT climate study Nature\", \"Nature journal climate research 2024\", \"peer reviewed climate satellite data\"]\n\n"
+        "Respond with a JSON array of 3 strings only, no other text.\n\n"
         f"Claim: {claim_text}",
         max_tokens=200,
     )
     if text is None:
-        return [claim_text]
+        # Fallback: extract keywords from claim instead of using full claim
+        return _extract_keywords(claim_text)
     try:
         queries = json.loads(_strip_code_fence(text))
         if isinstance(queries, list) and queries:
-            return [str(q) for q in queries[:3]]
+            # Validate and cap query length
+            validated = []
+            for q in queries[:3]:
+                q_str = str(q).strip()
+                words = q_str.split()
+                if len(words) > 10:
+                    q_str = " ".join(words[:8])
+                if len(q_str) >= 5:
+                    validated.append(q_str)
+            return validated if validated else _extract_keywords(claim_text)
     except Exception:
         logger.exception("query generation parse failed for claim: %r", claim_text)
-    return [claim_text]
+    return _extract_keywords(claim_text)
+
+
+def _extract_keywords(text: str) -> list[str]:
+    """Extract keyword-based search queries from claim text as a fallback."""
+    import re
+    words = re.findall(r'\b[A-Za-z]{3,}\b', text)
+    # Filter out common stop words
+    stop = {'the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can', 'had',
+            'her', 'was', 'one', 'our', 'out', 'has', 'his', 'how', 'its', 'may',
+            'new', 'now', 'old', 'see', 'way', 'who', 'did', 'get', 'let', 'say',
+            'she', 'too', 'use', 'that', 'with', 'have', 'this', 'will', 'your',
+            'from', 'they', 'been', 'said', 'each', 'make', 'like', 'than', 'them',
+            'then', 'what', 'when', 'were', 'there', 'their', 'would', 'could',
+            'should', 'about', 'after', 'before', 'between', 'into', 'just', 'also',
+            'more', 'some', 'very', 'only', 'over', 'such', 'most', 'which', 'other',
+            'being', 'where', 'while', 'those', 'these', 'through', 'during'}
+    keywords = [w for w in words if w.lower() not in stop]
+    if not keywords:
+        keywords = words[:6]
+    # Build 2 queries: main keywords and a subset
+    main = " ".join(keywords[:6])
+    secondary = " ".join(keywords[6:12]) if len(keywords) > 6 else main
+    return [main, secondary] if main else [text[:60]]
 
 
 # ---------------------------------------------------------------------------
