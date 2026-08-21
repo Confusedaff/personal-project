@@ -1,3 +1,42 @@
-myenv
+# Virtual environments
+myenv/
+venv/
+.venv/
+env/
+
+# Python
 __pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Environment secrets
+.env
+.env.*
+!.env.example
+
+# Runtime data (per-user, ephemeral on Render)
+data/users.db
+data/user_data/
+data/*.db
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Archives
 Fake-News-main.zip
+
+# Caches
+.pytest_cache/
+.ruff_cache/
+
+# Logs
+*.log

@@ -26,6 +26,44 @@ try:
 except ImportError:
     HAS_BS4 = False
 
+# Domain extraction from text
+_DOMAIN_RE = re.compile(
+    r'\b(?:https?://)?'
+    r'((?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+(?:[a-z]{2,}))',
+    re.IGNORECASE,
+)
+
+KNOWN_NEWS_DOMAINS = {
+    "reuters.com", "apnews.com", "bbc.com", "bbc.co.uk", "nytimes.com",
+    "washingtonpost.com", "theguardian.com", "npr.org", "pbs.org",
+    "wsj.com", "economist.com", "cnn.com", "foxnews.com", "abcnews.go.com",
+    "cbsnews.com", "nbcnews.com", "usatoday.com", "latimes.com",
+    "politico.com", "theatlantic.com", "newyorker.com", "propublica.org",
+    "bloomberg.com", "cnbc.com", "ft.com", "marketwatch.com",
+    "infowars.com", "naturalnews.com", "beforeitsnews.com",
+    "thegatewaypundit.com", "breitbart.com",
+}
+
+
+def _extract_domains_from_text(text: str) -> list[str]:
+    """Find news domain mentions in article text."""
+    if not text:
+        return []
+    found = []
+    for match in _DOMAIN_RE.finditer(text):
+        domain = match.group(1).lower()
+        # Filter out common non-news domains
+        if any(skip in domain for skip in ["example.com", "localhost", ".local"]):
+            continue
+        found.append(domain)
+    # Also check for known domains by name (e.g. "reuters" -> "reuters.com")
+    text_lower = text.lower()
+    for known in KNOWN_NEWS_DOMAINS:
+        name_part = known.split(".")[0]
+        if name_part in text_lower and known not in found:
+            found.append(known)
+    return list(dict.fromkeys(found))  # dedupe preserving order
+
 
 def _extract_images(soup) -> list[str]:
     """Pull all article-relevant image URLs from parsed HTML."""
@@ -124,6 +162,12 @@ class IngestionAgent(BaseAgent):
         # Combine title + text if not already combined
         full_text = f"{title}. {text}" if title and text else (text or title)
 
+        # Extract domains mentioned in the text
+        text_domains = _extract_domains_from_text(full_text)
+        if not metadata.get("domain") and text_domains:
+            metadata["domain"] = text_domains[0]
+            metadata["mentioned_domains"] = text_domains
+
         # Store enriched article for downstream agents
         enriched = {
             "title": title,
@@ -135,6 +179,7 @@ class IngestionAgent(BaseAgent):
             "source_domain": metadata.get("domain", ""),
             "author": metadata.get("author", ""),
             "published_date": metadata.get("published_date", ""),
+            "mentioned_domains": text_domains,
         }
 
         return AgentResult(

@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: fact-check-llm
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn api.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      # ── Required ──────────────────────────────────────────────
+      - key: SECRET_KEY
+        generateValue: true
+      # ── Optional: set these in Render dashboard ───────────────
+      # - key: GROQ_API_KEY
+      #   sync: false
+      # - key: ANTHROPIC_API_KEY
+      #   sync: false
+      # - key: BRAVE_API_KEY
+      #   sync: false
+      # - key: CORS_ORIGINS
+      #   value: ""

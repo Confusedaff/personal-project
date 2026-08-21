@@ -4,11 +4,12 @@ Serving API for the Fake News Detection Multi-Agent System.
 Now supports both the original single-model /predict endpoint and the new
 multi-agent /analyze endpoint with full evidence trails.
 
-Run with:  uvicorn api.main:app --reload --port 8000   (from the project root)
+Run locally:   uvicorn api.main:app --reload --port 8000
+Run on Render: uvicorn api.main:app --host 0.0.0.0 --port $PORT
 
 Endpoints
 ---------
-GET  /health                      liveness check + agent status
+GET  /health                      liveness check (no auth required)
 POST /predict                     legacy: {title?, text} -> label, confidence
 POST /analyze                     NEW: multi-agent analysis with evidence trail
 GET  /stats/model-comparison       accuracy/F1 per benchmarked model
@@ -23,15 +24,23 @@ GET  /knowledge-base               knowledge base stats
 """
 import json
 import logging
+import os
+import re
 import sys
 import time
 from pathlib import Path
 from typing import Any
 
+from dotenv import load_dotenv
+load_dotenv()
+
 import joblib
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
+import io
+from PyPDF2 import PdfReader
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
@@ -48,12 +57,31 @@ from agents.source_credibility import SourceCredibilityAgent
 from agents.media_forensics import MediaForensicsAgent
 from agents.bias_sentiment import BiasSentimentAgent
 from agents.orchestrator import Orchestrator
+from agents.input_profile import analyze_input
 from agents.knowledge_base import get_knowledge_base
 from agents.review_queue import get_review_queue
 from agents.feedback import get_feedback_loop
 
+# Import auth system
+from api.auth import get_current_user, get_current_user_optional
+from api import user_db
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("fakenews.api")
+
+# Ensure data directories exist on startup
+DATA_DIR = ROOT / "data"
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+(DATA_DIR / "user_data").mkdir(parents=True, exist_ok=True)
+
+# Pre-warm knowledge base (lazy model loading happens in background)
+logger.info("Pre-loading knowledge base...")
+try:
+    kb = get_knowledge_base()
+    kb._ensure_model()
+    logger.info("Knowledge base ready.")
+except Exception as e:
+    logger.warning(f"Knowledge base pre-load failed (non-fatal): {e}")
 
 app = FastAPI(
     title="Fake News Detection API — Multi-Agent System",
@@ -62,9 +90,33 @@ app = FastAPI(
                 "bias analysis. Returns verdicts with transparent evidence trails.",
     version="2.0.0",
 )
+# ── CORS ──
+# In production, set CORS_ORIGINS to your frontend domain(s), comma-separated.
+# Default: allow all origins for local development.
+_cors_origins_raw = os.environ.get("CORS_ORIGINS", "")
+_cors_origins = [o.strip() for o in _cors_origins_raw.split(",") if o.strip()] if _cors_origins_raw else ["*"]
 app.add_middleware(
-    CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
+    CORSMiddleware, allow_origins=_cors_origins, allow_methods=["*"], allow_headers=["*"],
+    allow_credentials=True if _cors_origins != ["*"] else False,
 )
+
+# ── Auth router ──
+from api.auth import router as auth_router
+app.include_router(auth_router, prefix="/auth", tags=["auth"])
+
+# ── Static file serving for dashboard ──
+from fastapi.staticfiles import StaticFiles
+DASHBOARD_DIR = ROOT / "dashboard"
+app.mount("/dashboard", StaticFiles(directory=str(DASHBOARD_DIR)), name="dashboard")
+
+
+@app.get("/login", response_class=HTMLResponse)
+async def login_page():
+    """Public login page — no auth required."""
+    login_path = DASHBOARD_DIR / "login.html"
+    if not login_path.exists():
+        raise HTTPException(status_code=503, detail="Login page not found.")
+    return HTMLResponse(content=login_path.read_text(encoding="utf-8"))
 
 MODELS_DIR = ROOT / "models"
 REPORTS_DIR = ROOT / "reports"
@@ -122,6 +174,10 @@ class AnalyzeResponse(BaseModel):
     needs_human_review: bool
     review_reason: str
     elapsed_ms: float
+    input_profile: str = ""
+    agent_weights: dict = Field(default_factory=dict)
+    weighting_reason: str = ""
+    extracted_text: str = ""
 
 
 class ReviewResolveRequest(BaseModel):
@@ -136,6 +192,26 @@ class FeedbackRequest(BaseModel):
     notes: str = Field("")
 
 
+class SentenceResult(BaseModel):
+    text: str
+    label: str
+    confidence: float
+    fake_probability: float
+    real_probability: float
+
+
+class SentenceClassifyResponse(BaseModel):
+    sentences: list[SentenceResult]
+    overall_label: str
+    real_count: int
+    fake_count: int
+    uncertain_count: int
+    total_count: int
+
+
+SENTENCE_SPLIT_RE = re.compile(r'(?<=[.!?])\s+')
+
+
 # ── Helpers ───────────────────────────────────────────────────────────
 
 def _load_report(name: str):
@@ -147,11 +223,41 @@ def _load_report(name: str):
 
 # ── Endpoints ─────────────────────────────────────────────────────────
 
+DASHBOARD_PATH = ROOT / "dashboard" / "index.html"
+
+
+@app.get("/", response_class=HTMLResponse)
+def dashboard():
+    """Serve the analyst dashboard. Client-side JS handles auth redirect."""
+    if not DASHBOARD_PATH.exists():
+        raise HTTPException(status_code=503, detail="Dashboard not built. Run src/build_dashboard.py.")
+    return HTMLResponse(content=DASHBOARD_PATH.read_text(encoding="utf-8"))
+
+
+@app.get("/dashboard", response_class=HTMLResponse)
+def dashboard_alt():
+    """Alias for / — serves the analyst dashboard."""
+    if not DASHBOARD_PATH.exists():
+        raise HTTPException(status_code=503, detail="Dashboard not built. Run src/build_dashboard.py.")
+    return HTMLResponse(content=DASHBOARD_PATH.read_text(encoding="utf-8"))
+
+
+ANALYTICS_PATH = ROOT / "dashboard" / "analytics.html"
+
+
+@app.get("/analytics", response_class=HTMLResponse)
+def analytics():
+    """Serve the analytics dashboard."""
+    if not ANALYTICS_PATH.exists():
+        raise HTTPException(status_code=503, detail="Analytics page not found.")
+    return HTMLResponse(content=ANALYTICS_PATH.read_text(encoding="utf-8"))
+
+
 @app.get("/health")
-def health():
+def health(user: dict = Depends(get_current_user_optional)):
+    """Health check — works both unauthenticated (basic) and authenticated (detailed)."""
     kb = get_knowledge_base()
-    queue = get_review_queue()
-    return {
+    base = {
         "status": "ok",
         "model": best_model_name,
         "version": "2.0.0-multi-agent",
@@ -161,12 +267,16 @@ def health():
             "bias_sentiment", "orchestrator"
         ],
         "knowledge_base": kb.get_stats(),
-        "review_queue": queue.get_stats(),
     }
+    if user is not None:
+        user_queue = user_db.get_review_queue_stats(user["id"])
+        base["user"] = user["username"]
+        base["review_queue"] = user_queue
+    return base
 
 
 @app.post("/predict", response_model=PredictResponse)
-def predict(req: PredictRequest):
+def predict(req: PredictRequest, user: dict = Depends(get_current_user)):
     """Legacy single-model endpoint (backward compatible)."""
     content = f"{req.title}. {req.text}" if req.title else req.text
     cleaned = clean_text(content, remove_dateline=True)
@@ -185,9 +295,10 @@ def predict(req: PredictRequest):
 
 
 @app.post("/analyze", response_model=AnalyzeResponse)
-def analyze(req: AnalyzeRequest):
+def analyze(req: AnalyzeRequest, user: dict = Depends(get_current_user)):
     """Multi-agent analysis with full evidence trail."""
     t0 = time.time()
+    user_id = user["id"]
 
     if not req.text and not req.url:
         raise HTTPException(status_code=400, detail="Either 'text' or 'url' must be provided.")
@@ -209,6 +320,13 @@ def analyze(req: AnalyzeRequest):
     claims = claim_result.evidence  # list of claim dicts
     enriched["claims"] = claims
 
+    # 2b. Input profiling for dynamic weighting
+    input_profile = analyze_input(
+        title=req.title,
+        text=req.text,
+        url=req.url,
+    )
+
     # 3. Run specialist agents
     requested_agents = req.agents
     run_all = "all" in requested_agents
@@ -222,9 +340,14 @@ def analyze(req: AnalyzeRequest):
         agent_results.append(ml_classifier_agent(enriched))
     if run_all or "fact_check" in requested_agents:
         agent_results.append(fact_check_agent(enriched))
-    if run_all or "source_credibility" in requested_agents:
+    # Only run source credibility if a URL or domain is available
+    has_source = bool(enriched.get("url") or enriched.get("source_domain")
+                      or enriched.get("metadata", {}).get("domain"))
+    if (run_all or "source_credibility" in requested_agents) and has_source:
         agent_results.append(source_credibility_agent(enriched))
-    if run_all or "media_forensics" in requested_agents:
+    # Skip media forensics for text-only input (no images to analyze)
+    has_images = bool(enriched.get("images"))
+    if (run_all or "media_forensics" in requested_agents) and has_images:
         agent_results.append(media_forensics_agent(enriched))
     if run_all or "bias_sentiment" in requested_agents:
         agent_results.append(bias_sentiment_agent(enriched))
@@ -233,20 +356,20 @@ def analyze(req: AnalyzeRequest):
     #    .label, .confidence, .reasoning, .evidence, .raw_output, .to_dict())
     orchestrator_input = enriched.copy()
     orchestrator_input["agent_results"] = agent_results
+    orchestrator_input["input_profile"] = input_profile
     verdict = orchestrator(orchestrator_input)
 
-    # 5. Human review queue
-    review_queue = get_review_queue()
+    # 5. Human review queue (per-user)
     if verdict.raw_output.get("needs_human_review", False):
-        queue_id = review_queue.add(
+        queue_id = user_db.add_to_review_queue(
+            user_id=user_id,
             article=enriched,
             verdict=verdict.to_dict(),
-            review_reason=verdict.raw_output.get("review_reason", ""),
+            reason=verdict.raw_output.get("review_reason", ""),
         )
-        logger.info(f"Added to review queue: entry #{queue_id}")
+        logger.info(f"Added to review queue for user {user_id}: entry #{queue_id}")
 
-    # 6. Log to knowledge base
-    kb = get_knowledge_base()
+    # 6. Log to knowledge base (per-user)
     for claim_obj in claims:
         claim_text = claim_obj.get("claim", "")
         if claim_text:
@@ -254,7 +377,8 @@ def analyze(req: AnalyzeRequest):
             for r in agent_results:
                 if r.agent_name == "fact_check":
                     sources = r.raw_output.get("sources", [])
-            kb.add_entry(
+            user_db.add_kb_entry(
+                user_id=user_id,
                 claim=claim_text,
                 verdict=verdict.label.value,
                 sources=sources[:5],
@@ -272,52 +396,214 @@ def analyze(req: AnalyzeRequest):
         needs_human_review=verdict.raw_output.get("needs_human_review", False),
         review_reason=verdict.raw_output.get("review_reason", ""),
         elapsed_ms=round(elapsed, 1),
+        input_profile=verdict.raw_output.get("input_profile", ""),
+        agent_weights=verdict.raw_output.get("agent_weights", {}),
+        weighting_reason=verdict.raw_output.get("weighting_reason", ""),
+    )
+
+
+@app.post("/upload-pdf", response_model=AnalyzeResponse)
+async def upload_pdf(file: UploadFile = File(...), user: dict = Depends(get_current_user)):
+    """Accept a PDF file, extract its text, and run multi-agent analysis."""
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are accepted.")
+
+    content = await file.read()
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File too large. Maximum size is 10 MB.")
+
+    try:
+        reader = PdfReader(io.BytesIO(content))
+        pages_text = []
+        for page in reader.pages:
+            text = page.extract_text()
+            if text:
+                pages_text.append(text)
+        extracted = "\n".join(pages_text).strip()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to parse PDF: {e}")
+
+    if not extracted:
+        raise HTTPException(status_code=400, detail="No text could be extracted from the PDF.")
+
+    # Reuse the same analysis pipeline as /analyze
+    t0 = time.time()
+    user_id = user["id"]
+
+    article = {
+        "title": file.filename,
+        "text": extracted,
+        "url": "",
+        "images": [],
+        "metadata": {"source": "pdf_upload", "filename": file.filename},
+    }
+    ingestion_result = ingestion_agent(article)
+    enriched = ingestion_result.raw_output.copy()
+    enriched["claims"] = []
+
+    claim_result = claim_extraction_agent(enriched)
+    claims = claim_result.evidence
+    enriched["claims"] = claims
+
+    input_profile = analyze_input(
+        title=file.filename,
+        text=extracted,
+        url="",
+    )
+
+    agent_results: list[AgentResult] = [
+        ingestion_result,
+        claim_result,
+    ]
+
+    if True:
+        agent_results.append(ml_classifier_agent(enriched))
+    if True:
+        agent_results.append(fact_check_agent(enriched))
+    if True:
+        agent_results.append(bias_sentiment_agent(enriched))
+
+    orchestrator_input = enriched.copy()
+    orchestrator_input["agent_results"] = agent_results
+    orchestrator_input["input_profile"] = input_profile
+    verdict = orchestrator(orchestrator_input)
+
+    if verdict.raw_output.get("needs_human_review", False):
+        queue_id = user_db.add_to_review_queue(
+            user_id=user_id,
+            article=enriched,
+            verdict=verdict.to_dict(),
+            reason=verdict.raw_output.get("review_reason", ""),
+        )
+        logger.info(f"Added to review queue for user {user_id}: entry #{queue_id}")
+
+    for claim_obj in claims:
+        claim_text = claim_obj.get("claim", "")
+        if claim_text:
+            sources = []
+            for r in agent_results:
+                if r.agent_name == "fact_check":
+                    sources = r.raw_output.get("sources", [])
+            user_db.add_kb_entry(
+                user_id=user_id,
+                claim=claim_text,
+                verdict=verdict.label.value,
+                sources=sources[:5],
+                article_text=enriched.get("full_text", "")[:500],
+            )
+
+    elapsed = (time.time() - t0) * 1000
+
+    return AnalyzeResponse(
+        label=verdict.label.value,
+        confidence=verdict.confidence,
+        reasoning=verdict.reasoning,
+        agent_results=[r.to_dict() for r in agent_results],
+        evidence_trail=verdict.evidence,
+        needs_human_review=verdict.raw_output.get("needs_human_review", False),
+        review_reason=verdict.raw_output.get("review_reason", ""),
+        elapsed_ms=round(elapsed, 1),
+        input_profile=verdict.raw_output.get("input_profile", ""),
+        agent_weights=verdict.raw_output.get("agent_weights", {}),
+        weighting_reason=verdict.raw_output.get("weighting_reason", ""),
+        extracted_text=extracted,
+    )
+
+
+@app.post("/classify-sentences", response_model=SentenceClassifyResponse)
+def classify_sentences(req: PredictRequest, user: dict = Depends(get_current_user)):
+    """Split text into sentences and classify each with the ML model."""
+    raw_text = req.text
+    if not raw_text or not raw_text.strip():
+        raise HTTPException(status_code=400, detail="No text provided.")
+
+    raw_sentences = SENTENCE_SPLIT_RE.split(raw_text.strip())
+    sentences = [s.strip() for s in raw_sentences if len(s.strip()) >= 10]
+
+    if not sentences:
+        raise HTTPException(status_code=400, detail="No classifiable sentences found (all too short).")
+
+    results: list[SentenceResult] = []
+    real_count = 0
+    fake_count = 0
+    uncertain_count = 0
+
+    for sentence in sentences[:20]:
+        cleaned = clean_text(sentence, remove_dateline=True)
+        if not cleaned.strip():
+            continue
+        X = vectorizer.transform([cleaned])
+        proba = model.predict_proba(X)[0]
+        fake_p, real_p = float(proba[0]), float(proba[1])
+        confidence = max(fake_p, real_p)
+
+        if real_p >= 0.55:
+            label = "real"
+            real_count += 1
+        elif fake_p >= 0.55:
+            label = "fake"
+            fake_count += 1
+        else:
+            label = "uncertain"
+            uncertain_count += 1
+
+        results.append(SentenceResult(
+            text=sentence,
+            label=label,
+            confidence=round(confidence, 4),
+            fake_probability=round(fake_p, 4),
+            real_probability=round(real_p, 4),
+        ))
+
+    total = real_count + fake_count + uncertain_count
+    overall = "real" if real_count > fake_count else "fake" if fake_count > real_count else "uncertain"
+
+    return SentenceClassifyResponse(
+        sentences=results,
+        overall_label=overall,
+        real_count=real_count,
+        fake_count=fake_count,
+        uncertain_count=uncertain_count,
+        total_count=total,
     )
 
 
 @app.get("/review-queue")
-def review_queue_status():
-    queue = get_review_queue()
-    return queue.get_stats()
+def review_queue_status(user: dict = Depends(get_current_user)):
+    return user_db.get_review_queue_stats(user["id"])
 
 
 @app.get("/review-queue/pending")
-def review_queue_pending():
-    queue = get_review_queue()
-    return queue.get_pending()
+def review_queue_pending(user: dict = Depends(get_current_user)):
+    return user_db.get_pending_reviews(user["id"])
 
 
 @app.post("/review/{entry_id}/resolve")
-def resolve_review(entry_id: int, req: ReviewResolveRequest):
-    queue = get_review_queue()
-    for entry in queue.queue:
-        if entry["id"] == entry_id:
-            entry["status"] = "resolved"
-            entry["human_verdict"] = req.human_verdict
-            entry["human_notes"] = req.notes
-            import time as _time
-            entry["reviewed_at"] = _time.time()
-            queue._save()
+def resolve_review(entry_id: int, req: ReviewResolveRequest, user: dict = Depends(get_current_user)):
+    user_id = user["id"]
+    success = user_db.resolve_review(user_id, entry_id, req.human_verdict, req.notes)
+    if not success:
+        raise HTTPException(status_code=404, detail=f"Review entry {entry_id} not found")
 
-            # Also log to feedback loop
-            feedback = get_feedback_loop()
-            article_text = entry.get("article", {}).get("title", "")
-            original_verdict = entry.get("verdict", {}).get("label", "")
-            feedback.log_correction(
-                article_text=article_text,
-                original_verdict=original_verdict,
+    # Also log to feedback loop (per-user)
+    queue = user_db.get_review_queue(user_id)
+    for entry in queue:
+        if entry["id"] == entry_id:
+            user_db.log_feedback(
+                user_id=user_id,
+                article_text=entry.get("article", {}).get("title", ""),
+                original_verdict=entry.get("verdict", {}).get("label", ""),
                 corrected_verdict=req.human_verdict,
                 notes=req.notes,
             )
-            return {"status": "resolved", "entry_id": entry_id}
-
-    raise HTTPException(status_code=404, detail=f"Review entry {entry_id} not found")
+            break
+    return {"status": "resolved", "entry_id": entry_id}
 
 
 @app.post("/feedback")
-def log_feedback(req: FeedbackRequest):
-    feedback = get_feedback_loop()
-    entry = feedback.log_correction(
+def log_feedback(req: FeedbackRequest, user: dict = Depends(get_current_user)):
+    entry = user_db.log_feedback(
+        user_id=user["id"],
         article_text=req.article_text,
         original_verdict=req.original_verdict,
         corrected_verdict=req.corrected_verdict,
@@ -327,34 +613,33 @@ def log_feedback(req: FeedbackRequest):
 
 
 @app.get("/knowledge-base/stats")
-def knowledge_base_stats():
-    kb = get_knowledge_base()
-    return kb.get_stats()
+def knowledge_base_stats(user: dict = Depends(get_current_user)):
+    return user_db.get_kb_stats(user["id"])
 
 
 @app.get("/stats/model-comparison")
-def model_comparison():
+def model_comparison(user: dict = Depends(get_current_user)):
     return _load_report("model_comparison.json")
 
 
 @app.get("/stats/confusion-matrix")
-def confusion_matrix():
+def confusion_matrix(user: dict = Depends(get_current_user)):
     data = _load_report("confusion_matrices.json")
     return data.get(best_model_name, data)
 
 
 @app.get("/stats/category-breakdown")
-def category_breakdown():
+def category_breakdown(user: dict = Depends(get_current_user)):
     return _load_report("category_breakdown.json")
 
 
 @app.get("/stats/trend")
-def trend():
+def trend(user: dict = Depends(get_current_user)):
     return _load_report("trend_data.json")
 
 
 @app.get("/limitations")
-def limitations():
+def limitations(user: dict = Depends(get_current_user)):
     path = ROOT / "docs" / "limitations.md"
     if not path.exists():
         raise HTTPException(status_code=503, detail="Limitations note not generated yet.")

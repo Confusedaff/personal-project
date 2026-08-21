@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fake News Detector — Login</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&family=Newsreader:ital,wght@0,400;0,500;1,500&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Space Grotesk', sans-serif;
+      background: #10161d;
+      color: #edeae0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .login-container {
+      width: 100%;
+      max-width: 420px;
+      padding: 40px 32px;
+    }
+    .login-header {
+      text-align: center;
+      margin-bottom: 36px;
+    }
+    .eyebrow {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      color: #e8a83d;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+    h1 {
+      font-family: 'Newsreader', serif;
+      font-weight: 500;
+      font-size: 32px;
+      line-height: 1.2;
+      color: #edeae0;
+    }
+    h1 em { font-style: italic; color: #4fb3a0; }
+    .sub {
+      font-size: 14px;
+      color: #a6a395;
+      margin-top: 10px;
+      line-height: 1.5;
+    }
+    .tabs {
+      display: flex;
+      gap: 0;
+      margin-bottom: 24px;
+      border: 1px solid #3d4a56;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .tab {
+      flex: 1;
+      padding: 12px 0;
+      background: transparent;
+      border: none;
+      color: #6e6c60;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 12px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .tab.active {
+      background: #4fb3a0;
+      color: #0d1a17;
+      font-weight: 500;
+    }
+    .tab:not(.active):hover { color: #a6a395; }
+    .form-group {
+      margin-bottom: 16px;
+    }
+    label {
+      display: block;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #6e6c60;
+      margin-bottom: 6px;
+    }
+    input[type="text"],
+    input[type="email"],
+    input[type="password"] {
+      width: 100%;
+      background: #1a2129;
+      color: #edeae0;
+      border: 1px solid #3d4a56;
+      border-radius: 8px;
+      padding: 12px 14px;
+      font-size: 14px;
+      font-family: 'Space Grotesk', sans-serif;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    input:focus { border-color: #4fb3a0; }
+    input::placeholder { color: #6e6c60; }
+    .btn {
+      width: 100%;
+      padding: 12px 0;
+      background: #4fb3a0;
+      color: #0d1a17;
+      border: none;
+      border-radius: 7px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 12.5px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      font-weight: 500;
+      cursor: pointer;
+      transition: opacity 0.15s;
+      margin-top: 8px;
+    }
+    .btn:hover { opacity: 0.88; }
+    .btn:disabled { opacity: 0.5; cursor: default; }
+    .error-msg {
+      font-size: 13px;
+      color: #e2604f;
+      margin-top: 12px;
+      display: none;
+      text-align: center;
+    }
+    .success-msg {
+      font-size: 13px;
+      color: #4fb3a0;
+      margin-top: 12px;
+      display: none;
+      text-align: center;
+    }
+    .footer-note {
+      text-align: center;
+      margin-top: 28px;
+      font-size: 12px;
+      color: #6e6c60;
+      line-height: 1.6;
+    }
+    .footer-note a { color: #4fb3a0; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="login-container">
+    <div class="login-header">
+      <h1>Fake news detection<br><em>analyst desk</em></h1>
+      <p class="sub">Sign in to access the multi-agent analysis dashboard.</p>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" id="tab-login" onclick="switchTab('login')">Sign In</button>
+      <button class="tab" id="tab-register" onclick="switchTab('register')">Register</button>
+    </div>
+
+    <!-- Login Form -->
+    <form id="login-form" onsubmit="handleLogin(event)">
+      <div class="form-group">
+        <label for="login-email">Email</label>
+        <input type="email" id="login-email" placeholder="you@example.com" required>
+      </div>
+      <div class="form-group">
+        <label for="login-password">Password</label>
+        <input type="password" id="login-password" placeholder="Enter password" required>
+      </div>
+      <button type="submit" class="btn" id="login-btn">Sign In</button>
+      <div class="error-msg" id="login-error"></div>
+    </form>
+
+    <!-- Register Form -->
+    <form id="register-form" style="display:none" onsubmit="handleRegister(event)">
+      <div class="form-group">
+        <label for="reg-username">Username</label>
+        <input type="text" id="reg-username" placeholder="Choose a username" required minlength="3">
+      </div>
+      <div class="form-group">
+        <label for="reg-email">Email</label>
+        <input type="email" id="reg-email" placeholder="you@example.com" required>
+      </div>
+      <div class="form-group">
+        <label for="reg-password">Password</label>
+        <input type="password" id="reg-password" placeholder="Min 6 characters" required minlength="6">
+      </div>
+      <button type="submit" class="btn" id="reg-btn">Create Account</button>
+      <div class="error-msg" id="reg-error"></div>
+      <div class="success-msg" id="reg-success"></div>
+    </form>
+
+    <div class="footer-note">
+      Predictions are a triage signal for human fact-checkers,<br>not an automated takedown mechanism.
+    </div>
+  </div>
+
+  <script src="/dashboard/auth.js"></script>
+  <script>
+    // If already logged in, redirect to dashboard
+    if (typeof FndAuth !== 'undefined' && FndAuth.isLoggedIn()) {
+      window.location.href = '/';
+    }
+
+    function switchTab(tab) {
+      document.getElementById('tab-login').classList.toggle('active', tab === 'login');
+      document.getElementById('tab-register').classList.toggle('active', tab === 'register');
+      document.getElementById('login-form').style.display = tab === 'login' ? 'block' : 'none';
+      document.getElementById('register-form').style.display = tab === 'register' ? 'block' : 'none';
+      // Clear messages
+      hideMsg('login-error');
+      hideMsg('reg-error');
+      hideMsg('reg-success');
+    }
+
+    function showError(id, msg) {
+      const el = document.getElementById(id);
+      el.textContent = msg;
+      el.style.display = 'block';
+    }
+    function hideMsg(id) { document.getElementById(id).style.display = 'none'; }
+
+    async function handleLogin(e) {
+      e.preventDefault();
+      hideMsg('login-error');
+      const btn = document.getElementById('login-btn');
+      btn.disabled = true;
+      btn.textContent = 'Signing in...';
+
+      const email = document.getElementById('login-email').value;
+      const password = document.getElementById('login-password').value;
+
+      try {
+        await FndAuth.login(email, password);
+        window.location.href = '/';
+      } catch (err) {
+        showError('login-error', err.message || 'Login failed');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Sign In';
+      }
+    }
+
+    async function handleRegister(e) {
+      e.preventDefault();
+      hideMsg('reg-error');
+      hideMsg('reg-success');
+      const btn = document.getElementById('reg-btn');
+      btn.disabled = true;
+      btn.textContent = 'Creating account...';
+
+      const username = document.getElementById('reg-username').value;
+      const email = document.getElementById('reg-email').value;
+      const password = document.getElementById('reg-password').value;
+
+      try {
+        await FndAuth.register(username, email, password);
+        showError('reg-success', 'Account created! Signing in...');
+        document.getElementById('reg-success').style.display = 'block';
+        hideMsg('reg-error');
+        // Auto-login after registration
+        await FndAuth.login(email, password);
+        window.location.href = '/';
+      } catch (err) {
+        showError('reg-error', err.message || 'Registration failed');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Create Account';
+      }
+    }
+  </script>
+</body>
+</html>

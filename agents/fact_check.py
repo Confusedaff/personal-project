@@ -1,32 +1,200 @@
 """
-Fact-Check Retrieval Agent — Web search + fact-check API cross-check.
+Fact-Check Retrieval Agent — Web search + fact-check API cross-check + LLM fallback.
 
-This is the real accuracy lever: for each extracted claim, searches the
-live web and known fact-check databases. This closes the gap between
-"does this read fake" (style) and "is this claim actually true" (facts).
+v2: LLM-based verdict analysis instead of regex pattern matching.
+v3: Groq as primary LLM provider.
+v4: Direct LLM verification when no evidence is found via search.
 """
 from __future__ import annotations
 
+import json
+import logging
 import os
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from functools import lru_cache
 from typing import Any
 
 from agents.base import BaseAgent, AgentResult, Label
 
-# Google Fact Check Tools API (free tier: 100 queries/day)
+logger = logging.getLogger(__name__)
+
 try:
     import httpx
     HAS_HTTPX = True
 except ImportError:
     HAS_HTTPX = False
 
+try:
+    import anthropic
+    HAS_ANTHROPIC = True
+except ImportError:
+    HAS_ANTHROPIC = False
+
+
+# ---------------------------------------------------------------------------
+# LLM provider config
+# ---------------------------------------------------------------------------
+
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
+GROQ_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+
+_ANTHROPIC_MODEL = os.environ.get("FACTCHECK_LLM_MODEL", "claude-sonnet-4-6")
+_anthropic_client = (
+    anthropic.Anthropic()
+    if HAS_ANTHROPIC and os.environ.get("ANTHROPIC_API_KEY")
+    else None
+)
+
+
+def _groq_complete(prompt: str, max_tokens: int = 2000) -> str | None:
+    """Call Groq's OpenAI-compatible chat completions endpoint."""
+    if not HAS_HTTPX or not GROQ_API_KEY:
+        return None
+    try:
+        resp = httpx.post(
+            GROQ_URL,
+            headers={
+                "Authorization": f"Bearer {GROQ_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": GROQ_MODEL,
+                "messages": [{"role": "user", "content": prompt}],
+                "max_completion_tokens": max_tokens,
+                "temperature": 0,
+            },
+            timeout=30,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        content = data["choices"][0]["message"]["content"]
+        if content is None:
+            content = ""
+        content = content.strip()
+        # Strip <think>...</think> tags from reasoning models
+        content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
+        return content if content else None
+    except Exception:
+        logger.exception("Groq completion failed")
+        return None
+
+
+def _anthropic_complete(prompt: str, max_tokens: int = 400) -> str | None:
+    if _anthropic_client is None:
+        return None
+    try:
+        resp = _anthropic_client.messages.create(
+            model=_ANTHROPIC_MODEL,
+            max_tokens=max_tokens,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return resp.content[0].text.strip()
+    except Exception:
+        logger.exception("Anthropic completion failed")
+        return None
+
+
+def _llm_complete(prompt: str, max_tokens: int = 2000) -> str | None:
+    """Groq first (fast/cheap), fall back to Anthropic if configured."""
+    text = _groq_complete(prompt, max_tokens=max_tokens)
+    if text is not None:
+        return text
+    return _anthropic_complete(prompt, max_tokens=max_tokens)
+
+
+def _strip_code_fence(text: str) -> str:
+    return text.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+
+
+def _extract_json(text: str) -> dict | None:
+    """Try to parse JSON from LLM response, with fallback regex extraction."""
+    cleaned = _strip_code_fence(text)
+    if cleaned:
+        try:
+            return json.loads(cleaned)
+        except json.JSONDecodeError:
+            pass
+    # Fallback: try to find a JSON object in the text
+    match = re.search(r'\{[^{}]*\}', text, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group())
+        except json.JSONDecodeError:
+            pass
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Direct LLM verification (fallback when search yields nothing)
+# ---------------------------------------------------------------------------
+
+_DIRECT_VERIFICATION_PROMPT = """You are a fact-checking expert. Given the following factual claim, determine if it is TRUE or FALSE based on your knowledge.
+
+Claim: {claim}
+
+Important rules:
+- Answer TRUE if the claim is factually accurate or mostly accurate.
+- Answer FALSE if the claim is factually inaccurate or mostly inaccurate.
+- Do NOT guess — if you genuinely cannot determine truthfulness, say UNCERTAIN.
+- Base your answer on well-established facts, not opinions.
+- If your knowledge is outdated and you cannot confirm the current status, say UNCERTAIN.
+
+Respond with JSON only, no other text:
+{{"verdict": "TRUE" or "FALSE" or "UNCERTAIN", "confidence": 0.0-1.0, "reasoning": "brief one-sentence explanation"}}
+"""
+
+
+def _direct_llm_verify(claim_text: str) -> dict:
+    """Send the claim directly to the LLM for a TRUE/FALSE verdict."""
+    text = _llm_complete(
+        _DIRECT_VERIFICATION_PROMPT.format(claim=claim_text),
+    )
+    if text is None:
+        return {"verdict_signal": "no_evidence", "confidence": 0.0,
+                "reasoning": "LLM unavailable for direct verification", "sources": [],
+                "method": "direct_llm_unavailable"}
+
+    try:
+        parsed = _extract_json(text)
+        if parsed is None:
+            raise json.JSONDecodeError("No JSON found", text, 0)
+        raw_verdict = parsed.get("verdict", "UNCERTAIN").upper()
+        confidence = float(parsed.get("confidence", 0.5))
+        reasoning = parsed.get("reasoning", "")
+
+        if raw_verdict == "TRUE":
+            signal = "supported"
+        elif raw_verdict == "FALSE":
+            signal = "contradicted"
+        else:
+            signal = "mixed"
+            confidence = min(confidence, 0.4)
+
+        return {
+            "verdict_signal": signal,
+            "confidence": confidence,
+            "reasoning": f"[Direct LLM] {reasoning}",
+            "sources": [],
+            "method": "direct_llm",
+        }
+    except Exception:
+        logger.exception("direct LLM verification parse failed for: %r, response: %r", claim_text[:80], text[:200])
+        return {"verdict_signal": "no_evidence", "confidence": 0.0,
+                "reasoning": "direct LLM verification failed to parse", "sources": [],
+                "method": "direct_llm_parse_error"}
+
+
+# ---------------------------------------------------------------------------
+# Retrieval
+# ---------------------------------------------------------------------------
 
 def _search_fact_check_api(query: str) -> list[dict]:
     """Query Google Fact Check Tools API."""
     api_key = os.environ.get("FACTCHECK_API_KEY", "")
     if not api_key or not HAS_HTTPX:
         return []
-
     try:
         resp = httpx.get(
             "https://factchecktools.googleapis.com/v1alpha1/claims:search",
@@ -48,25 +216,71 @@ def _search_fact_check_api(query: str) -> list[dict]:
             })
         return results
     except Exception:
+        logger.exception("fact-check API query failed: %r", query)
         return []
 
 
 def _search_web(query: str) -> list[dict]:
-    """Lightweight web search via DuckDuckGo HTML (no API key needed)."""
+    """Web search via DuckDuckGo API (JSON endpoint) with HTML fallback."""
     if not HAS_HTTPX:
         return []
 
+    # Try DuckDuckGo Instant Answer API first (more reliable than HTML scraping)
     try:
+        resp = httpx.get(
+            "https://api.duckduckgo.com/",
+            params={"q": query, "format": "json", "no_html": 1, "skip_disambig": 1},
+            timeout=10,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            results = []
+            # Abstract (main answer)
+            abstract = data.get("AbstractText", "")
+            if abstract:
+                results.append({
+                    "title": data.get("Heading", query),
+                    "snippet": abstract,
+                    "url": data.get("AbstractURL", ""),
+                })
+            # Related topics
+            for topic in data.get("RelatedTopics", [])[:4]:
+                if isinstance(topic, dict) and topic.get("Text"):
+                    results.append({
+                        "title": topic.get("Text", "")[:100],
+                        "snippet": topic.get("Text", ""),
+                        "url": topic.get("FirstURL", ""),
+                    })
+            if results:
+                return results
+        else:
+            logger.debug("DuckDuckGo JSON API returned %d for: %r", resp.status_code, query)
+    except Exception:
+        logger.debug("DuckDuckGo JSON API failed for: %r", query)
+
+    # Fallback: DuckDuckGo HTML search
+    try:
+        from bs4 import BeautifulSoup
         resp = httpx.get(
             "https://html.duckduckgo.com/html/",
             params={"q": query},
-            headers={"User-Agent": "Mozilla/5.0"},
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
             timeout=10,
+            follow_redirects=True,
         )
+        # DuckDuckGo returns 202 when rate-limiting or showing captcha
+        if resp.status_code not in (200, 202):
+            logger.debug("DuckDuckGo HTML returned %d for: %r", resp.status_code, query)
+            return []
+
+        text = resp.text
+        # Detect captcha or blocked pages
+        if "captcha" in text.lower() or "automated queries" in text.lower() or len(text) < 500:
+            logger.debug("DuckDuckGo returned captcha/block page for: %r", query)
+            return []
+
+        soup = BeautifulSoup(text, "html.parser")
         results = []
-        # Simple extraction from result blocks
-        from bs4 import BeautifulSoup
-        soup = BeautifulSoup(resp.text, "html.parser")
         for result in soup.find_all("div", class_="result")[:5]:
             title_el = result.find("a", class_="result__a")
             snippet_el = result.find("a", class_="result__snippet")
@@ -77,63 +291,190 @@ def _search_web(query: str) -> list[dict]:
                     "snippet": snippet_el.get_text(strip=True) if snippet_el else "",
                     "url": url_el.get_text(strip=True) if url_el else "",
                 })
+        if results:
+            return results
+        logger.debug("DuckDuckGo HTML parsed 0 results for: %r", query)
+    except Exception:
+        logger.exception("DuckDuckGo HTML search failed: %r", query)
+    return []
+
+
+def _search_brave(query: str) -> list[dict]:
+    """Fallback: Brave Search API (if configured)."""
+    api_key = os.environ.get("BRAVE_API_KEY", "")
+    if not api_key or not HAS_HTTPX:
+        return []
+    try:
+        resp = httpx.get(
+            "https://api.search.brave.com/res/v1/web/search",
+            params={"q": query, "count": 5},
+            headers={"Accept": "application/json", "X-Subscription-Token": api_key},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        results = []
+        for r in data.get("web", {}).get("results", [])[:5]:
+            results.append({
+                "title": r.get("title", ""),
+                "snippet": r.get("description", ""),
+                "url": r.get("url", ""),
+            })
         return results
     except Exception:
+        logger.exception("Brave search failed: %r", query)
         return []
 
 
-def _analyze_claim_verdict(claim_text: str, fact_results: list[dict],
-                           web_results: list[dict]) -> dict:
-    """Determine if evidence supports or contradicts the claim."""
-    verdict_signal = "no_evidence"
-    supporting = 0
-    contradicting = 0
-    sources = []
+@lru_cache(maxsize=2048)
+def _cached_web_search(query: str) -> tuple[dict, ...]:
+    """Search web: DuckDuckGo first, fall back to Brave if no results."""
+    results = _search_web(query)
+    if not results:
+        # DuckDuckGo returned nothing (rate-limited/blocked) — try Brave
+        logger.debug("DuckDuckGo returned no results, trying Brave for: %r", query)
+        results = _search_brave(query)
+    return tuple(results)
 
-    # Check fact-check API results
+
+def _generate_search_queries(claim_text: str) -> list[str]:
+    """Ask the model for targeted, checkable search queries."""
+    text = _llm_complete(
+        "Generate exactly 3 web search queries to verify or refute this claim.\n"
+        "Each query MUST be 3-8 words maximum. Use keywords only, no full sentences.\n"
+        "Focus on: key nouns, names, dates, numbers, organizations.\n\n"
+        "Example good queries:\n"
+        "Claim: 'Scientists at MIT published a study on climate change in Nature journal'\n"
+        "Queries: [\"MIT climate study Nature\", \"Nature journal climate research 2024\", \"peer reviewed climate satellite data\"]\n\n"
+        "Respond with a JSON array of 3 strings only, no other text.\n\n"
+        f"Claim: {claim_text}",
+        max_tokens=200,
+    )
+    if text is None:
+        # Fallback: extract keywords from claim instead of using full claim
+        return _extract_keywords(claim_text)
+    try:
+        queries = json.loads(_strip_code_fence(text))
+        if isinstance(queries, list) and queries:
+            # Validate and cap query length
+            validated = []
+            for q in queries[:3]:
+                q_str = str(q).strip()
+                words = q_str.split()
+                if len(words) > 10:
+                    q_str = " ".join(words[:8])
+                if len(q_str) >= 5:
+                    validated.append(q_str)
+            return validated if validated else _extract_keywords(claim_text)
+    except Exception:
+        logger.exception("query generation parse failed for claim: %r", claim_text)
+    return _extract_keywords(claim_text)
+
+
+def _extract_keywords(text: str) -> list[str]:
+    """Extract keyword-based search queries from claim text as a fallback."""
+    import re
+    words = re.findall(r'\b[A-Za-z]{3,}\b', text)
+    # Filter out common stop words
+    stop = {'the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can', 'had',
+            'her', 'was', 'one', 'our', 'out', 'has', 'his', 'how', 'its', 'may',
+            'new', 'now', 'old', 'see', 'way', 'who', 'did', 'get', 'let', 'say',
+            'she', 'too', 'use', 'that', 'with', 'have', 'this', 'will', 'your',
+            'from', 'they', 'been', 'said', 'each', 'make', 'like', 'than', 'them',
+            'then', 'what', 'when', 'were', 'there', 'their', 'would', 'could',
+            'should', 'about', 'after', 'before', 'between', 'into', 'just', 'also',
+            'more', 'some', 'very', 'only', 'over', 'such', 'most', 'which', 'other',
+            'being', 'where', 'while', 'those', 'these', 'through', 'during'}
+    keywords = [w for w in words if w.lower() not in stop]
+    if not keywords:
+        keywords = words[:6]
+    # Build 2 queries: main keywords and a subset
+    main = " ".join(keywords[:6])
+    secondary = " ".join(keywords[6:12]) if len(keywords) > 6 else main
+    return [main, secondary] if main else [text[:60]]
+
+
+# ---------------------------------------------------------------------------
+# Verdict
+# ---------------------------------------------------------------------------
+
+_VERDICT_PROMPT = """You are checking a single factual claim against retrieved evidence.
+
+Claim: {claim}
+
+Evidence (fact-check database results and web search snippets, may be noisy or irrelevant):
+{evidence}
+
+Decide the verdict signal for this claim based ONLY on the evidence above:
+- "supported": evidence confirms the claim
+- "contradicted": evidence shows the claim is false or a different fact is true
+- "mixed": evidence conflicts or partially supports/contradicts
+- "no_evidence": evidence is irrelevant, too thin, or doesn't address the claim
+
+Respond with JSON only, no other text:
+{{"verdict_signal": "...", "confidence": 0.0-1.0, "reasoning": "one sentence", "supporting_urls": ["..."], "contradicting_urls": ["..."]}}
+"""
+
+
+def _format_evidence(fact_results: list[dict], web_results: list[dict]) -> str:
+    lines = []
     for fr in fact_results:
-        rating = fr.get("verdict", "").lower()
-        sources.append(fr.get("url", ""))
-        if any(w in rating for w in ["false", "fake", "misleading", "pants on fire", "mostly false"]):
-            contradicting += 2
-        elif any(w in rating for w in ["true", "mostly true", "correct"]):
-            supporting += 2
-        elif any(w in rating for w in ["mixture", "half true", "partly"]):
-            supporting += 1
-            contradicting += 1
-
-    # Check web results for corroborating/contradicting signals
+        lines.append(
+            f"[fact-check] {fr.get('publisher', '?')} rated the claim "
+            f"\"{fr.get('claim_text', '')}\" as {fr.get('verdict', '?')} "
+            f"({fr.get('url', '')})"
+        )
     for wr in web_results:
-        snippet = (wr.get("snippet", "") + " " + wr.get("title", "")).lower()
-        # Simple keyword overlap
-        claim_words = set(claim_text.lower().split())
-        snippet_words = set(snippet.split())
-        overlap = len(claim_words & snippet_words)
-        if overlap > 3:
-            sources.append(wr.get("url", ""))
-            # Check if snippet contradicts
-            negation_words = {"not", "false", "debunked", "incorrect", "wrong", "misleading"}
-            if any(nw in snippet for nw in negation_words):
-                contradicting += 1
-            else:
-                supporting += 1
+        lines.append(f"[web] {wr.get('title', '')}: {wr.get('snippet', '')} ({wr.get('url', '')})")
+    return "\n".join(lines) if lines else "(no results returned)"
 
-    if contradicting > supporting:
-        verdict_signal = "contradicted"
-    elif supporting > contradicting:
-        verdict_signal = "supported"
-    elif supporting == contradicting and supporting > 0:
-        verdict_signal = "mixed"
-    else:
-        verdict_signal = "no_evidence"
 
-    return {
-        "verdict_signal": verdict_signal,
-        "supporting": supporting,
-        "contradicting": contradicting,
-        "sources": sources[:10],
-    }
+def _analyze_claim_verdict(claim_text: str, fact_results: list[dict],
+                            web_results: list[dict]) -> dict:
+    if not fact_results and not web_results:
+        return {"verdict_signal": "no_evidence", "confidence": 0.0,
+                "reasoning": "no search results retrieved", "sources": []}
 
+    evidence_text = _format_evidence(fact_results, web_results)
+    text = _llm_complete(
+        _VERDICT_PROMPT.format(claim=claim_text, evidence=evidence_text),
+        max_tokens=400,
+    )
+    urls = [r.get("url", "") for r in fact_results + web_results if r.get("url")]
+
+    if text is None:
+        return {"verdict_signal": "mixed", "confidence": 0.2,
+                "reasoning": "LLM unavailable; evidence retrieved but not analyzed",
+                "sources": urls[:10]}
+
+    text = text.strip()
+    if not text:
+        logger.warning("LLM returned empty response for claim: %r", claim_text[:80])
+        return {"verdict_signal": "no_evidence", "confidence": 0.0,
+                "reasoning": "LLM returned empty response", "sources": urls[:10]}
+
+    try:
+        parsed = _extract_json(text)
+        if parsed is None:
+            raise json.JSONDecodeError("No JSON found", text, 0)
+        sources = list(dict.fromkeys(
+            parsed.get("supporting_urls", []) + parsed.get("contradicting_urls", [])
+        ))
+        return {
+            "verdict_signal": parsed.get("verdict_signal", "no_evidence"),
+            "confidence": float(parsed.get("confidence", 0.0)),
+            "reasoning": parsed.get("reasoning", ""),
+            "sources": sources[:10],
+        }
+    except Exception:
+        logger.exception("verdict analysis parse failed for claim: %r, LLM response: %r", claim_text[:80], text[:200])
+        return {"verdict_signal": "no_evidence", "confidence": 0.0,
+                "reasoning": "verdict analysis failed", "sources": urls[:10]}
+
+
+# ---------------------------------------------------------------------------
+# Agent
+# ---------------------------------------------------------------------------
 
 class FactCheckAgent(BaseAgent):
     name = "fact_check"
@@ -141,65 +482,97 @@ class FactCheckAgent(BaseAgent):
     def run(self, article: dict[str, Any]) -> AgentResult:
         claims = article.get("claims", [])
         if not claims:
-            # Try to extract from the raw article
             claims = [{"claim": article.get("full_text", article.get("text", "")),
                        "type": "other", "checkability": "medium"}]
+        claims = [c for c in claims[:5] if len(c.get("claim", "")) >= 10]
 
-        claim_analyses = []
-        total_contradicted = 0
-        total_supported = 0
-        all_sources = []
+        def _process(claim_obj: dict) -> dict:
+            claim_text = claim_obj["claim"]
+            queries = _generate_search_queries(claim_text)
 
-        for claim_obj in claims[:5]:  # limit to 5 claims
-            claim_text = claim_obj.get("claim", "")
-            if not claim_text or len(claim_text) < 10:
-                continue
+            # ── Phase 1: Search for evidence ──
+            fact_results, web_results = [], []
+            seen = set()
+            with ThreadPoolExecutor(max_workers=(len(queries) * 2) or 1) as pool:
+                futures = {}
+                for q in queries:
+                    futures[pool.submit(_search_fact_check_api, q)] = "fact"
+                    futures[pool.submit(_cached_web_search, q)] = "web"
+                for fut in as_completed(futures):
+                    kind = futures[fut]
+                    try:
+                        results = fut.result()
+                    except Exception:
+                        continue
+                    for r in results:
+                        r = dict(r)
+                        url = r.get("url", "")
+                        if url and url in seen:
+                            continue
+                        seen.add(url)
+                        (fact_results if kind == "fact" else web_results).append(r)
 
-            # Search fact-check databases
-            fact_results = _search_fact_check_api(claim_text)
+            # ── Phase 2: Analyze with LLM if evidence found ──
+            if fact_results or web_results:
+                analysis = _analyze_claim_verdict(claim_text, fact_results, web_results)
+            else:
+                # ── Phase 3: No evidence found — fallback to direct LLM verification ──
+                logger.info("No search results for claim, falling back to direct LLM: %r", claim_text[:80])
+                analysis = _direct_llm_verify(claim_text)
 
-            # Also do a general web search
-            web_results = _search_web(claim_text)
-
-            analysis = _analyze_claim_verdict(claim_text, fact_results, web_results)
             analysis["original_claim"] = claim_text
-            claim_analyses.append(analysis)
+            analysis["search_queries"] = queries
+            return analysis
 
-            total_contradicted += analysis["contradicting"]
-            total_supported += analysis["supporting"]
-            all_sources.extend(analysis["sources"])
+        with ThreadPoolExecutor(max_workers=min(len(claims), 5) or 1) as pool:
+            claim_analyses = list(pool.map(_process, claims))
 
-        # Overall verdict
-        if total_contradicted > total_supported:
+        supported = sum(1 for c in claim_analyses if c["verdict_signal"] == "supported")
+        contradicted = sum(1 for c in claim_analyses if c["verdict_signal"] == "contradicted")
+        mixed = sum(1 for c in claim_analyses if c["verdict_signal"] == "mixed")
+        with_evidence = sum(1 for c in claim_analyses if c["verdict_signal"] != "no_evidence")
+        direct_llm_count = sum(1 for c in claim_analyses if c.get("method") == "direct_llm")
+
+        avg_conf = (
+            sum(c["confidence"] for c in claim_analyses) / len(claim_analyses)
+            if claim_analyses else 0.0
+        )
+
+        if contradicted > supported:
             label = Label.FAKE
-            confidence = min(0.5 + total_contradicted * 0.1, 0.95)
-        elif total_supported > total_contradicted:
+        elif supported > contradicted:
             label = Label.REAL
-            confidence = min(0.5 + total_supported * 0.1, 0.95)
         else:
             label = Label.UNCERTAIN
-            confidence = 0.3
 
-        # Count how many claims had evidence
-        claims_with_evidence = sum(
-            1 for c in claim_analyses if c["verdict_signal"] != "no_evidence"
-        )
+        coverage = (with_evidence / len(claim_analyses)) if claim_analyses else 0.0
+        confidence = round(min(0.3 + avg_conf * 0.5 + coverage * 0.2, 0.95), 2)
+
+        all_sources = list(dict.fromkeys(
+            url for c in claim_analyses for url in c.get("sources", [])
+        ))
+
+        methods = [c.get("method", "search") for c in claim_analyses]
+        method_summary = f"{direct_llm_count} direct LLM" if direct_llm_count else "search"
 
         return AgentResult(
             agent_name=self.name,
             label=label,
             confidence=confidence,
             reasoning=(
-                f"Checked {len(claim_analyses)} claims: "
-                f"{total_supported} supporting signals, {total_contradicted} contradicting. "
-                f"{claims_with_evidence}/{len(claim_analyses)} claims had external evidence."
+                f"Checked {len(claim_analyses)} claims: {supported} supported, "
+                f"{contradicted} contradicted, {mixed} mixed. "
+                f"{with_evidence}/{len(claim_analyses)} claims had usable evidence. "
+                f"Method: {method_summary}."
             ),
             evidence=claim_analyses,
             raw_output={
-                "total_supporting": total_supported,
-                "total_contradicting": total_contradicted,
+                "supported": supported,
+                "contradicted": contradicted,
+                "mixed": mixed,
                 "claims_checked": len(claim_analyses),
-                "claims_with_evidence": claims_with_evidence,
-                "sources": list(set(all_sources))[:20],
+                "claims_with_evidence": with_evidence,
+                "direct_llm_verifications": direct_llm_count,
+                "sources": all_sources[:20],
             },
         )

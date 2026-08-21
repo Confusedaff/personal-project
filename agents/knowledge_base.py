@@ -46,8 +46,14 @@ class KnowledgeBase:
         self.entries: list[dict] = []
         self.model = None
         self.index = None
+        self._model_loaded = False
         self._load()
 
+    def _ensure_model(self):
+        """Lazy-load the sentence-transformers model only when needed."""
+        if self._model_loaded:
+            return
+        self._model_loaded = True
         if HAS_SENTENCE_TRANSFORMERS:
             try:
                 self.model = SentenceTransformer("all-MiniLM-L6-v2")
@@ -69,6 +75,7 @@ class KnowledgeBase:
 
     def _build_index(self):
         """Build FAISS index for vector search."""
+        self._ensure_model()
         if not HAS_FAISS or not HAS_NUMPY or not self.model or not self.entries:
             return
 
@@ -102,6 +109,8 @@ class KnowledgeBase:
         """Search for similar fact-checked claims."""
         if not self.entries:
             return []
+
+        self._ensure_model()
 
         # Vector search if available
         if self.model and HAS_FAISS:
