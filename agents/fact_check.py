@@ -48,7 +48,7 @@ _anthropic_client = (
 )
 
 
-def _groq_complete(prompt: str, max_tokens: int = 400) -> str | None:
+def _groq_complete(prompt: str, max_tokens: int = 2000) -> str | None:
     """Call Groq's OpenAI-compatible chat completions endpoint."""
     if not HAS_HTTPX or not GROQ_API_KEY:
         return None
@@ -65,11 +65,17 @@ def _groq_complete(prompt: str, max_tokens: int = 400) -> str | None:
                 "max_completion_tokens": max_tokens,
                 "temperature": 0,
             },
-            timeout=20,
+            timeout=30,
         )
         resp.raise_for_status()
         data = resp.json()
-        return data["choices"][0]["message"]["content"].strip()
+        content = data["choices"][0]["message"]["content"]
+        if content is None:
+            content = ""
+        content = content.strip()
+        # Strip <think>...</think> tags from reasoning models
+        content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
+        return content if content else None
     except Exception:
         logger.exception("Groq completion failed")
         return None
@@ -90,7 +96,7 @@ def _anthropic_complete(prompt: str, max_tokens: int = 400) -> str | None:
         return None
 
 
-def _llm_complete(prompt: str, max_tokens: int = 400) -> str | None:
+def _llm_complete(prompt: str, max_tokens: int = 2000) -> str | None:
     """Groq first (fast/cheap), fall back to Anthropic if configured."""
     text = _groq_complete(prompt, max_tokens=max_tokens)
     if text is not None:
@@ -100,6 +106,24 @@ def _llm_complete(prompt: str, max_tokens: int = 400) -> str | None:
 
 def _strip_code_fence(text: str) -> str:
     return text.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+
+
+def _extract_json(text: str) -> dict | None:
+    """Try to parse JSON from LLM response, with fallback regex extraction."""
+    cleaned = _strip_code_fence(text)
+    if cleaned:
+        try:
+            return json.loads(cleaned)
+        except json.JSONDecodeError:
+            pass
+    # Fallback: try to find a JSON object in the text
+    match = re.search(r'\{[^{}]*\}', text, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group())
+        except json.JSONDecodeError:
+            pass
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -115,6 +139,7 @@ Important rules:
 - Answer FALSE if the claim is factually inaccurate or mostly inaccurate.
 - Do NOT guess — if you genuinely cannot determine truthfulness, say UNCERTAIN.
 - Base your answer on well-established facts, not opinions.
+- If your knowledge is outdated and you cannot confirm the current status, say UNCERTAIN.
 
 Respond with JSON only, no other text:
 {{"verdict": "TRUE" or "FALSE" or "UNCERTAIN", "confidence": 0.0-1.0, "reasoning": "brief one-sentence explanation"}}
@@ -125,7 +150,6 @@ def _direct_llm_verify(claim_text: str) -> dict:
     """Send the claim directly to the LLM for a TRUE/FALSE verdict."""
     text = _llm_complete(
         _DIRECT_VERIFICATION_PROMPT.format(claim=claim_text),
-        max_tokens=300,
     )
     if text is None:
         return {"verdict_signal": "no_evidence", "confidence": 0.0,
@@ -133,7 +157,9 @@ def _direct_llm_verify(claim_text: str) -> dict:
                 "method": "direct_llm_unavailable"}
 
     try:
-        parsed = json.loads(_strip_code_fence(text))
+        parsed = _extract_json(text)
+        if parsed is None:
+            raise json.JSONDecodeError("No JSON found", text, 0)
         raw_verdict = parsed.get("verdict", "UNCERTAIN").upper()
         confidence = float(parsed.get("confidence", 0.5))
         reasoning = parsed.get("reasoning", "")
@@ -154,7 +180,7 @@ def _direct_llm_verify(claim_text: str) -> dict:
             "method": "direct_llm",
         }
     except Exception:
-        logger.exception("direct LLM verification parse failed for: %r", claim_text)
+        logger.exception("direct LLM verification parse failed for: %r, response: %r", claim_text[:80], text[:200])
         return {"verdict_signal": "no_evidence", "confidence": 0.0,
                 "reasoning": "direct LLM verification failed to parse", "sources": [],
                 "method": "direct_llm_parse_error"}
@@ -421,8 +447,16 @@ def _analyze_claim_verdict(claim_text: str, fact_results: list[dict],
                 "reasoning": "LLM unavailable; evidence retrieved but not analyzed",
                 "sources": urls[:10]}
 
+    text = text.strip()
+    if not text:
+        logger.warning("LLM returned empty response for claim: %r", claim_text[:80])
+        return {"verdict_signal": "no_evidence", "confidence": 0.0,
+                "reasoning": "LLM returned empty response", "sources": urls[:10]}
+
     try:
-        parsed = json.loads(_strip_code_fence(text))
+        parsed = _extract_json(text)
+        if parsed is None:
+            raise json.JSONDecodeError("No JSON found", text, 0)
         sources = list(dict.fromkeys(
             parsed.get("supporting_urls", []) + parsed.get("contradicting_urls", [])
         ))
@@ -433,7 +467,7 @@ def _analyze_claim_verdict(claim_text: str, fact_results: list[dict],
             "sources": sources[:10],
         }
     except Exception:
-        logger.exception("verdict analysis parse failed for claim: %r", claim_text)
+        logger.exception("verdict analysis parse failed for claim: %r, LLM response: %r", claim_text[:80], text[:200])
         return {"verdict_signal": "no_evidence", "confidence": 0.0,
                 "reasoning": "verdict analysis failed", "sources": urls[:10]}
 

@@ -89,7 +89,7 @@ BASE_WEIGHTS: dict[InputType, dict[str, float]] = {
 _SKIP_AGENTS = {"claim_extraction", "ingestion", "orchestrator"}
 
 # Override rules: fact-check findings can override other agents
-OVERRIDE_THRESHOLD = 0.7  # if fact_check confidence > this and contradicts, override
+OVERRIDE_THRESHOLD = 0.4  # if fact_check confidence > this and contradicts, override
 
 
 def _evidence_quality_factor(result: AgentResult) -> float:
@@ -310,8 +310,32 @@ class Orchestrator(BaseAgent):
                     f"overrides ML classifier: source is known low-credibility"
                 )
 
+        # Short-input bypass: ML classifier is unreliable for very short inputs
+        # (trained on full articles, not single sentences). When fact_check is
+        # UNCERTAIN and ML says FAKE, downgrade to UNCERTAIN — the ML model
+        # cannot be trusted for style-based classification on short text.
+        short_input_override = False
+        if (not override and ml_result and ml_result.label == Label.FAKE
+                and profile.input_type in (InputType.MINIMAL, InputType.SHORT)):
+            if fact_check_result and fact_check_result.label == Label.UNCERTAIN:
+                short_input_override = True
+                override_reason = (
+                    f"ML classifier says FAKE (conf={ml_result.confidence:.3f}) but input is "
+                    f"{profile.input_type.value} ({profile.total_word_count} words) — ML was trained on "
+                    f"full articles and is unreliable for short inputs. Fact-check is UNCERTAIN "
+                    f"(conf={fact_check_result.confidence:.3f}). Downgrading to UNCERTAIN."
+                )
+
         # === Compute final verdict ===
-        if override:
+        if short_input_override:
+            final_label = Label.UNCERTAIN
+            final_confidence = 0.0
+            evidence_trail.append({
+                "agent": "orchestrator",
+                "label": "short_input_bypass",
+                "reasoning": override_reason,
+            })
+        elif override:
             overriding = fact_check_result or source_result
             final_label = overriding.label
             final_confidence = overriding.confidence
