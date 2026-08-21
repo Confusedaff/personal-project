@@ -860,10 +860,19 @@ html, body { margin: 0; padding: 0; background: #10161d; min-height: 100vh; }
       verdictBlock.style.display = 'none';
       try {
         const analyzeData = await uploadPdfToBackend(pdfSelectedFile);
-        const result = {
-          pFake: analyzeData.label === 'fake' ? analyzeData.confidence : 1 - analyzeData.confidence,
-          pReal: analyzeData.label === 'real' ? analyzeData.confidence : 1 - analyzeData.confidence,
-        };
+        let pFake = 0.5, pReal = 0.5;
+        const mlResult = (analyzeData.agent_results || []).find(r => r.agent === 'ml_classifier');
+        if (mlResult && mlResult.raw_output && mlResult.raw_output.proba) {
+          pFake = mlResult.raw_output.proba[0];
+          pReal = mlResult.raw_output.proba[1];
+        } else if (analyzeData.label === 'fake') {
+          pFake = analyzeData.confidence;
+          pReal = 1 - analyzeData.confidence;
+        } else if (analyzeData.label === 'real') {
+          pReal = analyzeData.confidence;
+          pFake = 1 - analyzeData.confidence;
+        }
+        const result = { pFake, pReal };
         pdfStatus.textContent = 'Analysis complete.';
         renderVerdict(result, 'multi-agent', analyzeData, analyzeData.extracted_text || '');
       } catch (err) {
@@ -898,10 +907,20 @@ html, body { margin: 0; padding: 0; background: #10161d; min-height: 100vh; }
     if (backendReachable) {
       try {
         analyzeData = await analyzeViaBackend(raw || '', url);
-        result = {
-          pFake: analyzeData.label === 'fake' ? analyzeData.confidence : 1 - analyzeData.confidence,
-          pReal: analyzeData.label === 'real' ? analyzeData.confidence : 1 - analyzeData.confidence,
-        };
+        // Extract probabilities: prefer ML classifier's raw_output, fall back to orchestrator confidence
+        let pFake = 0.5, pReal = 0.5;
+        const mlResult = (analyzeData.agent_results || []).find(r => r.agent === 'ml_classifier');
+        if (mlResult && mlResult.raw_output && mlResult.raw_output.proba) {
+          pFake = mlResult.raw_output.proba[0];
+          pReal = mlResult.raw_output.proba[1];
+        } else if (analyzeData.label === 'fake') {
+          pFake = analyzeData.confidence;
+          pReal = 1 - analyzeData.confidence;
+        } else if (analyzeData.label === 'real') {
+          pReal = analyzeData.confidence;
+          pFake = 1 - analyzeData.confidence;
+        }
+        result = { pFake, pReal };
         source = 'multi-agent';
       } catch (err) {
         console.warn('Multi-agent analyze failed, trying legacy /predict:', err);
