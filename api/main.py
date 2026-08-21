@@ -31,10 +31,12 @@ from pathlib import Path
 from typing import Any
 
 import joblib
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
+import io
+from PyPDF2 import PdfReader
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
@@ -343,6 +345,113 @@ def analyze(req: AnalyzeRequest, user: dict = Depends(get_current_user)):
         logger.info(f"Added to review queue for user {user_id}: entry #{queue_id}")
 
     # 6. Log to knowledge base (per-user)
+    for claim_obj in claims:
+        claim_text = claim_obj.get("claim", "")
+        if claim_text:
+            sources = []
+            for r in agent_results:
+                if r.agent_name == "fact_check":
+                    sources = r.raw_output.get("sources", [])
+            user_db.add_kb_entry(
+                user_id=user_id,
+                claim=claim_text,
+                verdict=verdict.label.value,
+                sources=sources[:5],
+                article_text=enriched.get("full_text", "")[:500],
+            )
+
+    elapsed = (time.time() - t0) * 1000
+
+    return AnalyzeResponse(
+        label=verdict.label.value,
+        confidence=verdict.confidence,
+        reasoning=verdict.reasoning,
+        agent_results=[r.to_dict() for r in agent_results],
+        evidence_trail=verdict.evidence,
+        needs_human_review=verdict.raw_output.get("needs_human_review", False),
+        review_reason=verdict.raw_output.get("review_reason", ""),
+        elapsed_ms=round(elapsed, 1),
+        input_profile=verdict.raw_output.get("input_profile", ""),
+        agent_weights=verdict.raw_output.get("agent_weights", {}),
+        weighting_reason=verdict.raw_output.get("weighting_reason", ""),
+    )
+
+
+@app.post("/upload-pdf", response_model=AnalyzeResponse)
+async def upload_pdf(file: UploadFile = File(...), user: dict = Depends(get_current_user)):
+    """Accept a PDF file, extract its text, and run multi-agent analysis."""
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are accepted.")
+
+    content = await file.read()
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File too large. Maximum size is 10 MB.")
+
+    try:
+        reader = PdfReader(io.BytesIO(content))
+        pages_text = []
+        for page in reader.pages:
+            text = page.extract_text()
+            if text:
+                pages_text.append(text)
+        extracted = "\n".join(pages_text).strip()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to parse PDF: {e}")
+
+    if not extracted:
+        raise HTTPException(status_code=400, detail="No text could be extracted from the PDF.")
+
+    # Reuse the same analysis pipeline as /analyze
+    t0 = time.time()
+    user_id = user["id"]
+
+    article = {
+        "title": file.filename,
+        "text": extracted,
+        "url": "",
+        "images": [],
+        "metadata": {"source": "pdf_upload", "filename": file.filename},
+    }
+    ingestion_result = ingestion_agent(article)
+    enriched = ingestion_result.raw_output.copy()
+    enriched["claims"] = []
+
+    claim_result = claim_extraction_agent(enriched)
+    claims = claim_result.evidence
+    enriched["claims"] = claims
+
+    input_profile = analyze_input(
+        title=file.filename,
+        text=extracted,
+        url="",
+    )
+
+    agent_results: list[AgentResult] = [
+        ingestion_result,
+        claim_result,
+    ]
+
+    if True:
+        agent_results.append(ml_classifier_agent(enriched))
+    if True:
+        agent_results.append(fact_check_agent(enriched))
+    if True:
+        agent_results.append(bias_sentiment_agent(enriched))
+
+    orchestrator_input = enriched.copy()
+    orchestrator_input["agent_results"] = agent_results
+    orchestrator_input["input_profile"] = input_profile
+    verdict = orchestrator(orchestrator_input)
+
+    if verdict.raw_output.get("needs_human_review", False):
+        queue_id = user_db.add_to_review_queue(
+            user_id=user_id,
+            article=enriched,
+            verdict=verdict.to_dict(),
+            reason=verdict.raw_output.get("review_reason", ""),
+        )
+        logger.info(f"Added to review queue for user {user_id}: entry #{queue_id}")
+
     for claim_obj in claims:
         claim_text = claim_obj.get("claim", "")
         if claim_text:

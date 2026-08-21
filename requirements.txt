@@ -28,6 +28,9 @@ python-whois>=0.9
 Pillow>=10.0
 ImageHash>=4.3
 
+# PDF parsing
+PyPDF2>=3.0
+
 # Authentication
 python-jose[cryptography]>=3.3
 bcrypt>=4.0

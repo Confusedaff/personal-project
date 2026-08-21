@@ -508,6 +508,7 @@ html, body { margin: 0; padding: 0; background: #10161d; min-height: 100vh; }
   const pdfRemove = document.getElementById('fnd-pdf-remove');
   const pdfStatus = document.getElementById('fnd-pdf-status');
   let pdfExtractedText = '';
+  let pdfSelectedFile = null;
 
   async function extractPdfText(file) {
     pdfStatus.style.display = 'block';
@@ -528,8 +529,8 @@ html, body { margin: 0; padding: 0; background: #10161d; min-height: 100vh; }
         ? `Extracted ${words.toLocaleString()} words from ${doc.numPages} page${doc.numPages === 1 ? '' : 's'}.`
         : 'No selectable text found in this PDF (it may be scanned/image-only).';
     } catch (err) {
-      console.warn('PDF extraction failed:', err);
-      pdfStatus.textContent = 'Could not read that PDF. Try another file.';
+      console.warn('PDF client-side extraction failed, will use backend fallback:', err);
+      pdfStatus.textContent = 'Client-side extraction failed \u2014 will use server-side extraction.';
       pdfExtractedText = '';
     }
   }
@@ -541,6 +542,7 @@ html, body { margin: 0; padding: 0; background: #10161d; min-height: 100vh; }
       pdfStatus.textContent = 'Please choose a .pdf file.';
       return;
     }
+    pdfSelectedFile = file;
     pdfFilenameText.textContent = `${file.name} \u00b7 ${(file.size / 1024).toFixed(0)} KB`;
     pdfFilename.style.display = 'flex';
     pdfDrop.style.display = 'none';
@@ -561,10 +563,35 @@ html, body { margin: 0; padding: 0; background: #10161d; min-height: 100vh; }
   pdfRemove.addEventListener('click', () => {
     pdfFileInput.value = '';
     pdfExtractedText = '';
+    pdfSelectedFile = null;
     pdfFilename.style.display = 'none';
     pdfDrop.style.display = 'flex';
     pdfStatus.style.display = 'none';
   });
+
+  // ── Backend: /upload-pdf (server-side PDF extraction fallback) ──
+  async function uploadPdfToBackend(file) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 30000);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch(`${API_BASE}/upload-pdf`, {
+        method: 'POST',
+        body: formData,
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+      if (!res.ok) {
+        let detail = '';
+        try { detail = (await res.json()).detail || ''; } catch (_) {}
+        throw new Error(detail || `API returned ${res.status}`);
+      }
+      return await res.json();
+    } finally {
+      clearTimeout(timer);
+    }
+  }
 
   // ── Backend: /analyze (multi-agent) ──
   async function analyzeViaBackend(text, url) {
@@ -710,6 +737,35 @@ html, body { margin: 0; padding: 0; background: #10161d; min-height: 100vh; }
     const isPdfTab = activeTab === 'pdf';
     const url = urlInput.value.trim();
     const raw = isUrlTab ? '' : (isPdfTab ? pdfExtractedText : input.value);
+
+    // PDF tab with file selected but no client-side text → upload to backend
+    if (isPdfTab && pdfSelectedFile && (!raw || !raw.trim())) {
+      runBtn.disabled = true;
+      runBtn.textContent = 'Analyzing PDF...';
+      pdfStatus.style.display = 'block';
+      pdfStatus.textContent = 'Uploading PDF to server for extraction\u2026';
+      errorMsg.style.display = 'none';
+      verdictBlock.style.display = 'none';
+      try {
+        const analyzeData = await uploadPdfToBackend(pdfSelectedFile);
+        const result = {
+          pFake: analyzeData.label === 'fake' ? analyzeData.confidence : 1 - analyzeData.confidence,
+          pReal: analyzeData.label === 'real' ? analyzeData.confidence : 1 - analyzeData.confidence,
+        };
+        pdfStatus.textContent = 'Analysis complete.';
+        renderVerdict(result, 'multi-agent', analyzeData);
+      } catch (err) {
+        pdfStatus.textContent = '';
+        errorMsg.textContent = 'PDF analysis failed: ' + err.message;
+        errorMsg.style.display = 'block';
+        verdictBlock.style.display = 'none';
+      } finally {
+        runBtn.disabled = false;
+        runBtn.textContent = 'Run analysis';
+      }
+      return;
+    }
+
     if ((!raw || !raw.trim()) && !url) {
       errorMsg.textContent = isPdfTab
         ? 'Upload a PDF with extractable text first.'
@@ -770,7 +826,11 @@ html, body { margin: 0; padding: 0; background: #10161d; min-height: 100vh; }
       return;
     }
 
-    // ── Render verdict ──
+    renderVerdict(result, source, analyzeData);
+  }
+
+  // ── Render verdict (shared by text/URL/PDF flows) ──
+  function renderVerdict(result, source, analyzeData) {
     errorMsg.style.display = 'none';
     const label = result.pReal >= result.pFake ? 'REAL' : 'FAKE';
     const confidence = Math.round(Math.max(result.pReal, result.pFake) * 100);

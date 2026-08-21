@@ -114,6 +114,39 @@ html, body { margin: 0; padding: 0; background: #10161d; min-height: 100vh; }
 #fnd-root .prob-pct { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--text-secondary); text-align: right; }
 #fnd-root .desk-footnote { font-size: 11.5px; color: var(--text-muted); margin-top: 16px; line-height: 1.5; }
 
+/* PDF upload */
+#fnd-root .pdf-upload-area {
+  border: 2px dashed var(--border-strong); border-radius: 8px; padding: 18px;
+  text-align: center; margin-top: 12px; cursor: pointer; transition: border-color 0.15s, background 0.15s;
+}
+#fnd-root .pdf-upload-area:hover { border-color: var(--real); background: rgba(79,179,160,0.04); }
+#fnd-root .pdf-upload-area.dragover { border-color: var(--real); background: rgba(79,179,160,0.08); }
+#fnd-root .pdf-upload-area input[type="file"] { display: none; }
+#fnd-root .pdf-upload-label {
+  font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--text-secondary);
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+#fnd-root .pdf-upload-label svg { width: 18px; height: 18px; color: var(--text-muted); }
+#fnd-root .pdf-filename {
+  font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--real);
+  margin-top: 8px; display: none;
+}
+#fnd-root .pdf-clear {
+  background: none; border: 1px solid var(--border); border-radius: 4px; padding: 2px 8px;
+  font-size: 11px; color: var(--text-muted); cursor: pointer; margin-left: 8px;
+}
+#fnd-root .pdf-clear:hover { border-color: var(--fake); color: var(--fake); }
+#fnd-root .pdf-loading {
+  font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--amber);
+  margin-top: 10px; display: none;
+}
+#fnd-root .pdf-loading .spinner {
+  display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border);
+  border-top-color: var(--amber); border-radius: 50%; animation: fnd-spin 0.6s linear infinite;
+  vertical-align: middle; margin-right: 6px;
+}
+@keyframes fnd-spin { to { transform: rotate(360deg); } }
+
 /* Agent breakdown */
 #fnd-root .agents-grid { margin-top: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 #fnd-root .agent-card {
@@ -215,12 +248,21 @@ html, body { margin: 0; padding: 0; background: #10161d; min-height: 100vh; }
     <div class="desk">
       <div class="desk-label">Wire intake — paste a URL or article text</div>
       <input type="url" id="fnd-url" placeholder="https://example.com/article (optional — the backend will scrape it)">
+      <div class="pdf-upload-area" id="fnd-pdf-area">
+        <input type="file" id="fnd-pdf-input" accept=".pdf">
+        <label class="pdf-upload-label" for="fnd-pdf-input">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 12 15 15"/></svg>
+          Or upload a PDF file
+        </label>
+        <div class="pdf-filename" id="fnd-pdf-filename"></div>
+      </div>
+      <div class="pdf-loading" id="fnd-pdf-loading"><span class="spinner"></span> Extracting text &amp; analyzing...</div>
       <textarea id="fnd-input" placeholder="Or paste article text directly here..."></textarea>
       <div class="desk-row">
         <button id="fnd-run">Run analysis</button>
         <span class="desk-hint" id="fnd-source-hint">Checking backend...</span>
       </div>
-      <div class="error-msg" id="fnd-error">Type or paste some article text first.</div>
+      <div class="error-msg" id="fnd-error">Provide some article text, a URL, or a PDF file.</div>
 
       <div class="verdict-block" id="fnd-verdict-block">
         <div class="verdict-line" id="fnd-verdict-line"></div>
@@ -381,6 +423,100 @@ html, body { margin: 0; padding: 0; background: #10161d; min-height: 100vh; }
   const reviewSection = document.getElementById('fnd-review-section');
   const reviewText = document.getElementById('fnd-review-text');
   const urlInput = document.getElementById('fnd-url');
+  const pdfInput = document.getElementById('fnd-pdf-input');
+  const pdfArea = document.getElementById('fnd-pdf-area');
+  const pdfFilename = document.getElementById('fnd-pdf-filename');
+  const pdfLoading = document.getElementById('fnd-pdf-loading');
+  let selectedPdfFile = null;
+
+  // ── PDF upload handling ──
+  pdfArea.addEventListener('click', function(e) {
+    if (e.target === pdfInput || e.target.closest('.pdf-clear')) return;
+  });
+
+  pdfArea.addEventListener('dragover', function(e) {
+    e.preventDefault();
+    pdfArea.classList.add('dragover');
+  });
+  pdfArea.addEventListener('dragleave', function() {
+    pdfArea.classList.remove('dragover');
+  });
+  pdfArea.addEventListener('drop', function(e) {
+    e.preventDefault();
+    pdfArea.classList.remove('dragover');
+    const files = e.dataTransfer.files;
+    if (files.length > 0 && files[0].name.toLowerCase().endsWith('.pdf')) {
+      handlePdfSelected(files[0]);
+    }
+  });
+
+  pdfInput.addEventListener('change', function() {
+    if (this.files.length > 0) {
+      handlePdfSelected(this.files[0]);
+    }
+  });
+
+  function handlePdfSelected(file) {
+    selectedPdfFile = file;
+    pdfFilename.innerHTML = escapeHtml(file.name) + ' <button class="pdf-clear" id="fnd-pdf-clear">&times;</button>';
+    pdfFilename.style.display = 'block';
+    document.getElementById('fnd-pdf-clear').addEventListener('click', function(e) {
+      e.stopPropagation();
+      clearPdfSelection();
+    });
+  }
+
+  function clearPdfSelection() {
+    selectedPdfFile = null;
+    pdfInput.value = '';
+    pdfFilename.style.display = 'none';
+    pdfFilename.innerHTML = '';
+  }
+
+  async function uploadPdf(file) {
+    runBtn.disabled = true;
+    runBtn.textContent = 'Analyzing PDF...';
+    pdfLoading.style.display = 'block';
+    errorMsg.style.display = 'none';
+    verdictBlock.style.display = 'none';
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 30000);
+
+      const res = await fetch(`${API_BASE}/upload-pdf`, {
+        method: 'POST',
+        body: formData,
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+
+      if (!res.ok) {
+        let detail = '';
+        try { detail = (await res.json()).detail || ''; } catch (_) {}
+        throw new Error(detail || `API returned ${res.status}`);
+      }
+
+      const analyzeData = await res.json();
+      const result = {
+        pFake: analyzeData.label === 'fake' ? analyzeData.confidence : 1 - analyzeData.confidence,
+        pReal: analyzeData.label === 'real' ? analyzeData.confidence : 1 - analyzeData.confidence,
+      };
+
+      renderVerdict(result, 'multi-agent', analyzeData);
+    } catch (err) {
+      errorMsg.textContent = 'PDF analysis failed: ' + err.message;
+      errorMsg.style.display = 'block';
+      verdictBlock.style.display = 'none';
+    } finally {
+      runBtn.disabled = false;
+      runBtn.textContent = 'Run analysis';
+      pdfLoading.style.display = 'none';
+    }
+  }
 
   // ── Backend: /analyze (multi-agent) ──
   async function analyzeViaBackend(text, url) {
@@ -498,10 +634,56 @@ html, body { margin: 0; padding: 0; background: #10161d; min-height: 100vh; }
     return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
 
+  // ── Render verdict (shared by analyze & PDF upload) ──
+  function renderVerdict(result, source, analyzeData) {
+    errorMsg.style.display = 'none';
+    const label = result.pReal >= result.pFake ? 'REAL' : 'FAKE';
+    const confidence = Math.round(Math.max(result.pReal, result.pFake) * 100);
+    verdictBlock.style.display = 'block';
+    typewrite(verdictLine, `VERDICT: ${label} \u00b7 confidence ${confidence}%`, label.toLowerCase());
+
+    if (source === 'multi-agent') {
+      sourceBadge.className = 'source-badge multi-agent';
+      sourceBadge.textContent = 'multi-agent \u00b7 5 agents + orchestrator';
+    } else if (source === 'live') {
+      sourceBadge.className = 'source-badge live';
+      sourceBadge.textContent = `live \u00b7 ${best}`;
+    } else {
+      sourceBadge.className = 'source-badge fallback';
+      sourceBadge.textContent = 'backup \u00b7 in-browser model';
+    }
+
+    requestAnimationFrame(() => {
+      document.getElementById('fnd-bar-fake').style.width = Math.round(result.pFake * 100) + '%';
+      document.getElementById('fnd-bar-real').style.width = Math.round(result.pReal * 100) + '%';
+      document.getElementById('fnd-pct-fake').textContent = Math.round(result.pFake * 100) + '%';
+      document.getElementById('fnd-pct-real').textContent = Math.round(result.pReal * 100) + '%';
+    });
+
+    if (analyzeData) {
+      renderAgents(analyzeData.agent_results || []);
+      renderEvidence(analyzeData.evidence_trail || []);
+
+      if (analyzeData.needs_human_review) {
+        reviewSection.style.display = 'block';
+        reviewText.textContent = analyzeData.review_reason || 'Routed to human review (low confidence or agent conflict)';
+      } else {
+        reviewSection.style.display = 'none';
+      }
+    } else {
+      agentsSection.style.display = 'none';
+      evidenceSection.style.display = 'none';
+      reviewSection.style.display = 'none';
+    }
+  }
+
   // ── Main analysis function ──
   async function runAnalysis() {
     const raw = input.value;
     const url = urlInput.value.trim();
+    if (selectedPdfFile) {
+      return uploadPdf(selectedPdfFile);
+    }
     if ((!raw || !raw.trim()) && !url) {
       errorMsg.style.display = 'block';
       verdictBlock.style.display = 'none';
@@ -559,49 +741,7 @@ html, body { margin: 0; padding: 0; background: #10161d; min-height: 100vh; }
       return;
     }
 
-    // ── Render verdict ──
-    errorMsg.style.display = 'none';
-    const label = result.pReal >= result.pFake ? 'REAL' : 'FAKE';
-    const confidence = Math.round(Math.max(result.pReal, result.pFake) * 100);
-    verdictBlock.style.display = 'block';
-    typewrite(verdictLine, `VERDICT: ${label} \u00b7 confidence ${confidence}%`, label.toLowerCase());
-
-    // Source badge
-    if (source === 'multi-agent') {
-      sourceBadge.className = 'source-badge multi-agent';
-      sourceBadge.textContent = 'multi-agent \u00b7 5 agents + orchestrator';
-    } else if (source === 'live') {
-      sourceBadge.className = 'source-badge live';
-      sourceBadge.textContent = `live \u00b7 ${best}`;
-    } else {
-      sourceBadge.className = 'source-badge fallback';
-      sourceBadge.textContent = 'backup \u00b7 in-browser model';
-    }
-
-    // Probability bars
-    requestAnimationFrame(() => {
-      document.getElementById('fnd-bar-fake').style.width = Math.round(result.pFake * 100) + '%';
-      document.getElementById('fnd-bar-real').style.width = Math.round(result.pReal * 100) + '%';
-      document.getElementById('fnd-pct-fake').textContent = Math.round(result.pFake * 100) + '%';
-      document.getElementById('fnd-pct-real').textContent = Math.round(result.pReal * 100) + '%';
-    });
-
-    // ── Multi-agent extras ──
-    if (analyzeData) {
-      renderAgents(analyzeData.agent_results || []);
-      renderEvidence(analyzeData.evidence_trail || []);
-
-      if (analyzeData.needs_human_review) {
-        reviewSection.style.display = 'block';
-        reviewText.textContent = analyzeData.review_reason || 'Routed to human review (low confidence or agent conflict)';
-      } else {
-        reviewSection.style.display = 'none';
-      }
-    } else {
-      agentsSection.style.display = 'none';
-      evidenceSection.style.display = 'none';
-      reviewSection.style.display = 'none';
-    }
+    renderVerdict(result, source, analyzeData);
   }
 
   runBtn.addEventListener('click', runAnalysis);
