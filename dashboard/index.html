@@ -191,6 +191,48 @@ html, body { margin: 0; padding: 0; background: #10161d; min-height: 100vh; }
 }
 #fnd-root .evidence-item .ev-sources a:hover { background: rgba(255,255,255,0.08); }
 
+/* Sentence breakdown */
+#fnd-root .sentence-section { margin-top: 16px; }
+#fnd-root .sentence-toggle {
+  background: none; border: 1px solid var(--border); border-radius: 6px; width: 100%;
+  padding: 10px 14px; cursor: pointer; display: flex; align-items: center; justify-content: space-between;
+  font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--text-muted); transition: background 0.12s, color 0.12s;
+}
+#fnd-root .sentence-toggle:hover { background: var(--panel-2); color: var(--text-secondary); }
+#fnd-root .sentence-toggle .arrow { transition: transform 0.2s; }
+#fnd-root .sentence-toggle.open .arrow { transform: rotate(90deg); }
+#fnd-root .sentence-summary {
+  font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--text-secondary);
+  padding: 10px 0 0; display: none;
+}
+#fnd-root .sentence-summary .count-real { color: var(--real); font-weight: 500; }
+#fnd-root .sentence-summary .count-fake { color: var(--fake); font-weight: 500; }
+#fnd-root .sentence-summary .count-uncertain { color: var(--amber); font-weight: 500; }
+#fnd-root .sentence-list {
+  max-height: 400px; overflow-y: auto; margin-top: 8px; display: none;
+  border: 1px solid var(--border); border-radius: 6px;
+}
+#fnd-root .sentence-item {
+  padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 13px;
+  line-height: 1.55; display: flex; gap: 10px; align-items: flex-start;
+}
+#fnd-root .sentence-item:last-child { border-bottom: none; }
+#fnd-root .sentence-bar {
+  width: 4px; min-height: 18px; border-radius: 2px; flex-shrink: 0; margin-top: 2px;
+}
+#fnd-root .sentence-bar.real { background: var(--real); }
+#fnd-root .sentence-bar.fake { background: var(--fake); }
+#fnd-root .sentence-bar.uncertain { background: var(--amber); }
+#fnd-root .sentence-text { color: var(--text-secondary); flex: 1; }
+#fnd-root .sentence-conf {
+  font-family: 'IBM Plex Mono', monospace; font-size: 10px; padding: 2px 6px;
+  border-radius: 3px; flex-shrink: 0; margin-top: 2px;
+}
+#fnd-root .sentence-conf.real { background: var(--real-dim); color: var(--real); }
+#fnd-root .sentence-conf.fake { background: var(--fake-dim); color: var(--fake); }
+#fnd-root .sentence-conf.uncertain { background: var(--amber-dim); color: var(--amber); }
+
 /* Review status */
 #fnd-root .review-badge {
   display: inline-flex; align-items: center; gap: 6px; margin-top: 12px;
@@ -334,6 +376,18 @@ html, body { margin: 0; padding: 0; background: #10161d; min-height: 100vh; }
           </div>
         </div>
 
+        <!-- Sentence breakdown -->
+        <div id="fnd-sentence-section" style="display:none">
+          <div class="sentence-section">
+            <button class="sentence-toggle" id="fnd-sentence-toggle">
+              <span>Sentence Breakdown</span>
+              <span class="arrow">&#9654;</span>
+            </button>
+            <div class="sentence-summary" id="fnd-sentence-summary"></div>
+            <div class="sentence-list" id="fnd-sentence-list"></div>
+          </div>
+        </div>
+
         <!-- Human review badge -->
         <div id="fnd-review-section" style="display:none">
           <div class="review-badge"><span class="dot"></span> <span id="fnd-review-text">Routed to human review</span></div>
@@ -474,6 +528,17 @@ html, body { margin: 0; padding: 0; background: #10161d; min-height: 100vh; }
   const reviewSection = document.getElementById('fnd-review-section');
   const reviewText = document.getElementById('fnd-review-text');
   const urlInput = document.getElementById('fnd-url');
+  const sentenceSection = document.getElementById('fnd-sentence-section');
+  const sentenceToggle = document.getElementById('fnd-sentence-toggle');
+  const sentenceSummary = document.getElementById('fnd-sentence-summary');
+  const sentenceList = document.getElementById('fnd-sentence-list');
+
+  // ── Sentence breakdown toggle ──
+  sentenceToggle.addEventListener('click', () => {
+    const isOpen = sentenceToggle.classList.toggle('open');
+    sentenceSummary.style.display = isOpen ? 'block' : 'none';
+    sentenceList.style.display = isOpen ? 'block' : 'none';
+  });
 
   // ── Input tab switching ──
   const tabUrl = document.getElementById('fnd-tab-url');
@@ -591,6 +656,53 @@ html, body { margin: 0; padding: 0; background: #10161d; min-height: 100vh; }
     } finally {
       clearTimeout(timer);
     }
+  }
+
+  // ── Backend: /classify-sentences (per-sentence ML classification) ──
+  async function classifySentences(text) {
+    if (!text || !text.trim() || !backendReachable) return null;
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 15000);
+      const res = await fetch(`${API_BASE}/classify-sentences`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: '', text: text }),
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+      if (!res.ok) return null;
+      return await res.json();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function renderSentences(data) {
+    if (!data || !data.sentences || data.sentences.length === 0) {
+      sentenceSection.style.display = 'none';
+      return;
+    }
+    sentenceSection.style.display = 'block';
+    // Reset toggle state
+    sentenceToggle.classList.remove('open');
+    sentenceSummary.style.display = 'none';
+    sentenceList.style.display = 'none';
+
+    const parts = [];
+    if (data.real_count > 0) parts.push(`<span class="count-real">${data.real_count} real</span>`);
+    if (data.fake_count > 0) parts.push(`<span class="count-fake">${data.fake_count} fake</span>`);
+    if (data.uncertain_count > 0) parts.push(`<span class="count-uncertain">${data.uncertain_count} uncertain</span>`);
+    sentenceSummary.innerHTML = `${data.sentences.length} sentences analyzed: ${parts.join(', ')}`;
+
+    sentenceList.innerHTML = data.sentences.map(s => {
+      const pct = Math.round(Math.max(s.fake_probability, s.real_probability) * 100);
+      return `<div class="sentence-item">
+        <div class="sentence-bar ${s.label}"></div>
+        <div class="sentence-text">${escapeHtml(s.text)}</div>
+        <span class="sentence-conf ${s.label}">${s.label} ${pct}%</span>
+      </div>`;
+    }).join('');
   }
 
   // ── Backend: /analyze (multi-agent) ──
@@ -753,7 +865,7 @@ html, body { margin: 0; padding: 0; background: #10161d; min-height: 100vh; }
           pReal: analyzeData.label === 'real' ? analyzeData.confidence : 1 - analyzeData.confidence,
         };
         pdfStatus.textContent = 'Analysis complete.';
-        renderVerdict(result, 'multi-agent', analyzeData);
+        renderVerdict(result, 'multi-agent', analyzeData, analyzeData.extracted_text || '');
       } catch (err) {
         pdfStatus.textContent = '';
         errorMsg.textContent = 'PDF analysis failed: ' + err.message;
@@ -826,11 +938,11 @@ html, body { margin: 0; padding: 0; background: #10161d; min-height: 100vh; }
       return;
     }
 
-    renderVerdict(result, source, analyzeData);
+    renderVerdict(result, source, analyzeData, raw);
   }
 
   // ── Render verdict (shared by text/URL/PDF flows) ──
-  function renderVerdict(result, source, analyzeData) {
+  function renderVerdict(result, source, analyzeData, sourceText) {
     errorMsg.style.display = 'none';
     const label = result.pReal >= result.pFake ? 'REAL' : 'FAKE';
     const confidence = Math.round(Math.max(result.pReal, result.pFake) * 100);
@@ -872,6 +984,14 @@ html, body { margin: 0; padding: 0; background: #10161d; min-height: 100vh; }
       agentsSection.style.display = 'none';
       evidenceSection.style.display = 'none';
       reviewSection.style.display = 'none';
+    }
+
+    // ── Sentence breakdown (async, non-blocking) ──
+    sentenceSection.style.display = 'none';
+    if (sourceText && sourceText.trim().length > 20) {
+      classifySentences(sourceText).then(data => {
+        if (data) renderSentences(data);
+      });
     }
   }
 

@@ -25,6 +25,7 @@ GET  /knowledge-base               knowledge base stats
 import json
 import logging
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -173,6 +174,7 @@ class AnalyzeResponse(BaseModel):
     input_profile: str = ""
     agent_weights: dict = Field(default_factory=dict)
     weighting_reason: str = ""
+    extracted_text: str = ""
 
 
 class ReviewResolveRequest(BaseModel):
@@ -185,6 +187,26 @@ class FeedbackRequest(BaseModel):
     original_verdict: str = Field(..., description="Original prediction")
     corrected_verdict: str = Field(..., description="Corrected verdict: 'real' or 'fake'")
     notes: str = Field("")
+
+
+class SentenceResult(BaseModel):
+    text: str
+    label: str
+    confidence: float
+    fake_probability: float
+    real_probability: float
+
+
+class SentenceClassifyResponse(BaseModel):
+    sentences: list[SentenceResult]
+    overall_label: str
+    real_count: int
+    fake_count: int
+    uncertain_count: int
+    total_count: int
+
+
+SENTENCE_SPLIT_RE = re.compile(r'(?<=[.!?])\s+')
 
 
 # ── Helpers ───────────────────────────────────────────────────────────
@@ -481,6 +503,65 @@ async def upload_pdf(file: UploadFile = File(...), user: dict = Depends(get_curr
         input_profile=verdict.raw_output.get("input_profile", ""),
         agent_weights=verdict.raw_output.get("agent_weights", {}),
         weighting_reason=verdict.raw_output.get("weighting_reason", ""),
+        extracted_text=extracted,
+    )
+
+
+@app.post("/classify-sentences", response_model=SentenceClassifyResponse)
+def classify_sentences(req: PredictRequest, user: dict = Depends(get_current_user)):
+    """Split text into sentences and classify each with the ML model."""
+    raw_text = req.text
+    if not raw_text or not raw_text.strip():
+        raise HTTPException(status_code=400, detail="No text provided.")
+
+    raw_sentences = SENTENCE_SPLIT_RE.split(raw_text.strip())
+    sentences = [s.strip() for s in raw_sentences if len(s.strip()) >= 10]
+
+    if not sentences:
+        raise HTTPException(status_code=400, detail="No classifiable sentences found (all too short).")
+
+    results: list[SentenceResult] = []
+    real_count = 0
+    fake_count = 0
+    uncertain_count = 0
+
+    for sentence in sentences[:20]:
+        cleaned = clean_text(sentence, remove_dateline=True)
+        if not cleaned.strip():
+            continue
+        X = vectorizer.transform([cleaned])
+        proba = model.predict_proba(X)[0]
+        fake_p, real_p = float(proba[0]), float(proba[1])
+        confidence = max(fake_p, real_p)
+
+        if real_p >= 0.55:
+            label = "real"
+            real_count += 1
+        elif fake_p >= 0.55:
+            label = "fake"
+            fake_count += 1
+        else:
+            label = "uncertain"
+            uncertain_count += 1
+
+        results.append(SentenceResult(
+            text=sentence,
+            label=label,
+            confidence=round(confidence, 4),
+            fake_probability=round(fake_p, 4),
+            real_probability=round(real_p, 4),
+        ))
+
+    total = real_count + fake_count + uncertain_count
+    overall = "real" if real_count > fake_count else "fake" if fake_count > real_count else "uncertain"
+
+    return SentenceClassifyResponse(
+        sentences=results,
+        overall_label=overall,
+        real_count=real_count,
+        fake_count=fake_count,
+        uncertain_count=uncertain_count,
+        total_count=total,
     )
 
 
